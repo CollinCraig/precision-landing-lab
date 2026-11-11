@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rooftop Vertiport Concept</title>
+<meta name="description" content="Design concept for the Precision Landing Lab rooftop vertiport: pad plan, approach and go-around profile, and the M3 video overlay HUD.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f3f1eb; --panel:#fbfaf6; --ink:#1a1e23; --ink-2:#4b535c; --ink-3:#7b838c; --rule:#d8d4ca;
+  --roof:#cfcbc2; --roof-line:#bdb8ad; --parapet:#9d988e; --deck:#43484f; --deck-sa:#585e66; --tlof:#6e7379;
+  --mark:#f6f5f0; --tdpc:#f0c02e; --vblue:#2a5bd7; --lit:#2fd16b; --amber:#d98a00; --red:#cf3a2c; --cyan:#0a9fbf;
+  --wedge:rgba(42,91,215,.10); --wedge-line:rgba(42,91,215,.55); --ofv:rgba(47,209,107,.10); --ofv-line:rgba(31,140,72,.7);
+  --shadow:0 1px 0 rgba(0,0,0,.03),0 8px 28px -12px rgba(30,30,20,.18);
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d1115; --panel:#141a20; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#77818b; --rule:#26303a;
+  --roof:#1c2228; --roof-line:#252d35; --parapet:#38424c; --deck:#2c3238; --deck-sa:#3a4148; --tlof:#535a61;
+  --wedge:rgba(110,150,255,.10); --wedge-line:rgba(130,165,255,.6); --ofv:rgba(47,209,107,.10); --ofv-line:rgba(70,210,120,.7);
+  --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0d1115; --panel:#141a20; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#77818b; --rule:#26303a;
+  --roof:#1c2228; --roof-line:#252d35; --parapet:#38424c; --deck:#2c3238; --deck-sa:#3a4148; --tlof:#535a61;
+  --wedge:rgba(110,150,255,.10); --wedge-line:rgba(130,165,255,.6); --ofv:rgba(47,209,107,.10); --ofv-line:rgba(70,210,120,.7);
+  --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--sans);}
+.wrap{max-width:1180px;margin:0 auto;padding:0 16px 64px}
+header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:36px 0 20px;border-bottom:1px solid var(--rule)}
+.eyebrow{font:500 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+h1{font-size:clamp(26px,4vw,40px);line-height:1.08;margin:10px 0 8px;letter-spacing:-.015em;font-weight:700}
+.lede{color:var(--ink-2);max-width:62ch;margin:0}
+.toggle{flex:none;font:500 13px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:999px;padding:8px 14px;cursor:pointer}
+.toggle:hover{border-color:var(--ink-3)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin:16px 0 0;font:13px var(--mono);color:var(--ink-3)}
+.meta b{color:var(--ink-2);font-weight:500}
+section{margin-top:44px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:14px}
+.sec-head .n{font:600 13px var(--mono);color:var(--ink-3)}
+h2{font-size:22px;margin:0;letter-spacing:-.01em}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;align-items:start}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.fig{padding:10px}
+.fig svg{display:block;width:100%;height:auto}
+.notes{padding:18px 20px;font-size:14.5px}
+.notes h3{font:600 12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin:0 0 10px}
+.notes h3:not(:first-child){margin-top:20px}
+.notes p{margin:0 0 10px;color:var(--ink-2)}
+dl.spec{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;margin:0;font-size:14px}
+dl.spec dt{font:500 13px var(--mono);color:var(--ink)}
+dl.spec dd{margin:0;color:var(--ink-2)}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;border:1px solid rgba(0,0,0,.2)}
+.tag{font:500 11px var(--mono);padding:2px 6px;border-radius:4px;border:1px solid var(--rule);color:var(--ink-3);white-space:nowrap}
+figcaption{font-size:13px;color:var(--ink-3);padding:8px 14px 12px}
+.hud-controls{display:flex;flex-wrap:wrap;gap:8px;padding:12px 14px;border-top:1px solid var(--rule)}
+.hud-controls button{font:500 12.5px var(--mono);letter-spacing:.06em;background:transparent;color:var(--ink-2);border:1px solid var(--rule);border-radius:8px;padding:7px 12px;cursor:pointer}
+.hud-controls button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.hud-controls .sp{flex:1}
+.hud-controls label{font:12.5px var(--mono);color:var(--ink-3);display:flex;align-items:center;gap:6px}
+footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-size:13px;color:var(--ink-3)}
+footer a{color:var(--ink-2)}
+/* svg text */
+.t{font-family:var(--sans);fill:var(--ink)}
+.tm{font-family:var(--mono);fill:var(--ink-2)}
+.lead{stroke:var(--ink-3);stroke-width:1;fill:none}
+.hud text{font-family:var(--mono)}
+@media (max-width:900px){.grid{grid-template-columns:1fr}.notes{border-top:1px solid var(--rule)}}
+@media (max-width:560px){header.top{flex-direction:column;align-items:flex-start}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.blink{animation:blink 1.4s steps(2,start) infinite}@keyframes blink{to{visibility:hidden}}
+</style>
+</head>
+<body>
+<!-- shared SVG defs (tag symbol, textures, glows) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="apriltag" viewBox="0 0 10 10"><rect width="10" height="10" fill="#fff"/><g id="tagbits" fill="#111"></g></symbol>
+    <pattern id="mesh" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M0 0L8 8M8 0L0 8" stroke="var(--ink-3)" stroke-width=".6" opacity=".55"/></pattern>
+    <pattern id="broom" width="6" height="6" patternUnits="userSpaceOnUse"><path d="M0 3H6" stroke="#000" stroke-opacity=".08" stroke-width="1"/></pattern>
+    <pattern id="deckplate" width="14" height="14" patternUnits="userSpaceOnUse"><path d="M3 4l3-2M9 10l3-2" stroke="#fff" stroke-opacity=".06" stroke-width="1.2"/></pattern>
+    <pattern id="gravel" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="3" cy="4" r=".9" fill="var(--roof-line)"/><circle cx="13" cy="9" r=".8" fill="var(--roof-line)"/><circle cx="8" cy="16" r=".9" fill="var(--roof-line)"/><circle cx="17" cy="18" r=".7" fill="var(--roof-line)"/></pattern>
+    <radialGradient id="glow"><stop offset="0" stop-color="#7dffae" stop-opacity=".95"/><stop offset=".35" stop-color="#2fd16b" stop-opacity=".55"/><stop offset="1" stop-color="#2fd16b" stop-opacity="0"/></radialGradient>
+    <linearGradient id="floodcone" x1="0" x2="1"><stop offset="0" stop-color="#ffe9a8" stop-opacity=".45"/><stop offset="1" stop-color="#ffe9a8" stop-opacity="0"/></linearGradient>
+    <linearGradient id="wedgeS" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--wedge-line)" stop-opacity=".22"/><stop offset="1" stop-color="var(--wedge-line)" stop-opacity="0"/></linearGradient>
+    <linearGradient id="wedgeN" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="var(--wedge-line)" stop-opacity=".14"/><stop offset="1" stop-color="var(--wedge-line)" stop-opacity="0"/></linearGradient>
+  </defs>
+</svg>
+
+<div class="wrap">
+<header class="top">
+  <div>
+    <div class="eyebrow">Precision Landing Lab · design concept · M2 world / M3 overlay</div>
+    <h1>Rooftop vertiport, scaled to a 1&nbsp;m pad</h1>
+    <p class="lede">A small rooftop vertiport laid out with FAA EB&nbsp;105 proportions and EASA marking conventions, sized for a small quadcopter. The AprilTag sits inside the touchdown ring, where a pilot's aim point would be.</p>
+    <div class="meta"><span><b>Design D</b> 1.0 m</span><span><b>Ratios</b> TLOF 1D · FATO 2D · SA 3D</span><span><b>Deck</b> +0.9 m (elevated)</span><span><b>Source</b> docs/research/vertiport-design.md</span></div>
+  </div>
+  <button class="toggle" id="themeBtn" type="button" aria-label="Toggle light or dark theme">◐ theme</button>
+</header>
+
+<!-- ============ A. TOP-DOWN ============ -->
+<section id="plan">
+  <div class="sec-head"><span class="n">A</span><h2>Plan view: pad, markings, lights</h2></div>
+  <div class="grid">
+    <figure class="card" style="margin:0">
+      <div class="fig">
+      <svg viewBox="0 0 860 640" role="img" aria-labelledby="planT">
+        <title id="planT">Top-down plan of the rooftop vertiport, north up, preferred approach from the south</title>
+        <!-- roof -->
+        <rect x="14" y="14" width="832" height="612" rx="4" fill="var(--parapet)"/>
+        <rect x="24" y="24" width="812" height="592" fill="var(--roof)"/>
+        <rect x="24" y="24" width="812" height="592" fill="url(#gravel)"/>
+        <!-- approach wedges (preferred S, reciprocal N) -->
+        <path d="M260 450 L500 450 L536 616 L224 616 Z" fill="url(#wedgeS)"/>
+        <path d="M260 450 L224 616 M500 450 L536 616" stroke="var(--wedge-line)" stroke-width="1.2" stroke-dasharray="6 5"/>
+        <path d="M260 210 L500 210 L524 24 L236 24 Z" fill="url(#wedgeN)"/>
+        <path d="M260 210 L236 24 M500 210 L524 24" stroke="var(--wedge-line)" stroke-width="1" stroke-dasharray="3 6" opacity=".7"/>
+        <!-- rooftop clutter -->
+        <g>
+          <rect x="54" y="58" width="96" height="70" rx="3" fill="var(--parapet)" opacity=".85"/>
+          <path d="M66 70h72M66 82h72M66 94h72M66 106h72M66 118h72" stroke="var(--roof)" stroke-width="2" opacity=".5"/>
+          <rect x="60" y="476" width="84" height="104" rx="3" fill="var(--parapet)" opacity=".85"/>
+          <circle cx="102" cy="528" r="26" fill="none" stroke="var(--roof)" stroke-width="3" opacity=".55"/>
+          <text class="tm" x="102" y="598" font-size="12" text-anchor="middle">HVAC</text>
+          <text class="tm" x="102" y="146" font-size="12" text-anchor="middle">HVAC · below 8:1</text>
+          <!-- stair tower with floodlights -->
+          <rect x="660" y="452" width="152" height="140" rx="3" fill="var(--parapet)"/>
+          <text class="tm" x="736" y="530" font-size="12" text-anchor="middle">STAIR / EGRESS</text>
+          <path d="M664 464 L520 300 L560 260 Z" fill="url(#floodcone)" opacity=".8"/>
+          <path d="M664 580 L520 440 L500 400 Z" fill="url(#floodcone)" opacity=".6"/>
+          <circle cx="666" cy="462" r="5" fill="#ffe08a" stroke="#8a6d1d"/>
+          <circle cx="666" cy="582" r="5" fill="#ffe08a" stroke="#8a6d1d"/>
+        </g>
+        <!-- safety net shelf -->
+        <rect x="140" y="90" width="480" height="480" fill="url(#mesh)"/>
+        <rect x="140" y="90" width="480" height="480" fill="none" stroke="var(--ink-3)" stroke-width="1" opacity=".6"/>
+        <!-- deck: safety area -->
+        <rect x="200" y="150" width="360" height="360" fill="var(--deck-sa)"/>
+        <rect x="200" y="150" width="360" height="360" fill="url(#deckplate)"/>
+        <!-- FATO -->
+        <rect x="260" y="210" width="240" height="240" fill="var(--deck)"/>
+        <rect x="260" y="210" width="240" height="240" fill="url(#deckplate)"/>
+        <rect x="260" y="210" width="240" height="240" fill="none" stroke="var(--mark)" stroke-width="3.6" stroke-dasharray="18 18" stroke-dashoffset="9"/>
+        <!-- TLOF -->
+        <rect x="320" y="270" width="120" height="120" fill="var(--tlof)"/>
+        <rect x="320" y="270" width="120" height="120" fill="url(#broom)"/>
+        <rect x="321.8" y="271.8" width="116.4" height="116.4" fill="none" stroke="var(--mark)" stroke-width="3.6"/>
+        <!-- TDPC ring -->
+        <circle cx="380" cy="330" r="32.4" fill="none" stroke="var(--tdpc)" stroke-width="4.8"/>
+        <!-- AprilTag 0.30 m incl quiet zone -->
+        <use href="#apriltag" x="362" y="312" width="36" height="36"/>
+        <!-- size/weight box -->
+        <rect x="415" y="360" width="18" height="24" fill="var(--mark)"/>
+        <line x1="415" y1="372" x2="433" y2="372" stroke="#111" stroke-width=".8"/>
+        <text x="424" y="370" font-size="9" font-family="var(--mono)" text-anchor="middle" fill="#111" font-weight="600">2</text>
+        <text x="424" y="382" font-size="8" font-family="var(--mono)" text-anchor="middle" fill="#111" font-weight="600">D1</text>
+        <!-- V ident + approach bar -->
+        <circle cx="380" cy="417" r="14.4" fill="var(--vblue)"/>
+        <path d="M372 409 L380 425 L388 409" fill="none" stroke="var(--mark)" stroke-width="3" stroke-linejoin="miter"/>
+        <rect x="365" y="436" width="30" height="5" fill="var(--mark)"/>
+        <!-- TLOF lights: 16 -->
+        <g id="tlofLights"></g>
+        <!-- FATO lights: 8 -->
+        <g id="fatoLights"></g>
+        <!-- SA boundary (annotation only) -->
+        <rect x="200" y="150" width="360" height="360" fill="none" stroke="var(--amber)" stroke-width="1.2" stroke-dasharray="2 4"/>
+        <!-- windsock (wind from N → sock points S) -->
+        <g transform="translate(772 74)">
+          <circle r="16" fill="none" stroke="var(--ink-3)" stroke-dasharray="2 3"/>
+          <circle r="4" fill="var(--ink)"/>
+          <g>
+            <path d="M-7 4 L7 4 L5 14 L-5 14 Z" fill="#f07a1a"/>
+            <path d="M-5 14 L5 14 L4 24 L-4 24 Z" fill="#fff" stroke="#ccc" stroke-width=".4"/>
+            <path d="M-4 24 L4 24 L3.5 34 L-3.5 34 Z" fill="#f07a1a"/>
+            <path d="M-3.5 34 L3.5 34 L3 44 L-3 44 Z" fill="#fff" stroke="#ccc" stroke-width=".4"/>
+            <path d="M-3 44 L3 44 L2.5 52 L-2.5 52 Z" fill="#f07a1a"/>
+          </g>
+          <text class="tm" x="-22" y="4" font-size="12" text-anchor="end">WINDSOCK 0.4 m</text>
+          <text class="tm" x="-22" y="19" font-size="11" text-anchor="end" opacity=".8">mast 1.2 m · outside SA</text>
+        </g>
+        <!-- north + wind -->
+        <g transform="translate(60 210)">
+          <path d="M0 -24 L8 4 L0 -2 L-8 4 Z" fill="var(--ink)"/>
+          <text class="t" y="22" font-size="13" text-anchor="middle" font-weight="600">N</text>
+        </g>
+        <g transform="translate(60 300)">
+          <path d="M0 -26 V18 M-6 10 L0 20 L6 10" stroke="var(--ink-2)" stroke-width="1.6" fill="none"/>
+          <text class="tm" y="40" font-size="11" text-anchor="middle">WIND</text>
+          <text class="tm" y="54" font-size="11" text-anchor="middle">360°</text>
+        </g>
+        <!-- approach labels -->
+        <text class="tm" x="380" y="604" font-size="12.5" text-anchor="middle" fill="var(--wedge-line)" style="fill:var(--wedge-line)">▲ PREFERRED APPROACH · INTO WIND · 8:1 SURFACE</text>
+        <text class="tm" x="380" y="44" font-size="12" text-anchor="middle" style="fill:var(--wedge-line)" opacity=".9">RECIPROCAL PATH (180° apart) ▼</text>
+        <!-- callouts -->
+        <g font-size="13.5">
+          <path class="lead" d="M560 168 H600 L612 160 H640"/>
+          <text class="t" x="646" y="158" font-weight="600">Safety area 3.0 m</text>
+          <text class="tm" x="646" y="174" font-size="11.5">½ D clear border · not painted</text>
+          <path class="lead" d="M500 232 H600 L612 214 H640"/>
+          <text class="t" x="646" y="212" font-weight="600">FATO 2.0 m</text>
+          <text class="tm" x="646" y="228" font-size="11.5">white dashes 15 / 15 cm</text>
+          <path class="lead" d="M440 286 H600 L612 268 H640"/>
+          <text class="t" x="646" y="266" font-weight="600">TLOF 1.0 m</text>
+          <text class="tm" x="646" y="282" font-size="11.5">solid white 3 cm · broomed</text>
+          <path class="lead" d="M410 316 H600 L612 322 H640"/>
+          <text class="t" x="646" y="320" font-weight="600">Touchdown ring</text>
+          <text class="tm" x="646" y="336" font-size="11.5">yellow · inner Ø 0.50 m</text>
+          <path class="lead" d="M396 334 H470 L478 376 H640"/>
+          <text class="t" x="646" y="374" font-weight="600">AprilTag 36h11</text>
+          <text class="tm" x="646" y="390" font-size="11.5">0.24 m + white quiet zone</text>
+          <path class="lead" d="M395 417 H470 L478 428 H640"/>
+          <text class="t" x="646" y="426" font-weight="600">“V” ident</text>
+          <text class="tm" x="646" y="442" font-size="11.5">blue Ø0.24 m · approach bar</text>
+        </g>
+        <g font-size="13.5">
+          <path class="lead" d="M318 270 V250 H230 L218 236 H178"/>
+          <text class="t" x="172" y="226" text-anchor="end" font-weight="600">Green lights</text>
+          <text class="tm" x="172" y="242" text-anchor="end" font-size="11.5">TLOF ×16 · FATO ×8</text>
+          <path class="lead" d="M150 380 H178"/>
+          <text class="t" x="132" y="384" text-anchor="end" font-weight="600" font-size="12.5">Net</text>
+          <text class="tm" x="132" y="398" text-anchor="end" font-size="11">0.5 m</text>
+        </g>
+        <!-- scale bar -->
+        <g transform="translate(210 548)">
+          <rect x="0" y="0" width="60" height="6" fill="var(--ink)"/><rect x="60" y="0" width="60" height="6" fill="none" stroke="var(--ink)"/>
+          <text class="tm" x="0" y="-5" font-size="11">0</text><text class="tm" x="60" y="-5" font-size="11" text-anchor="middle">0.5</text><text class="tm" x="120" y="-5" font-size="11" text-anchor="middle">1 m</text>
+        </g>
+      </svg>
+      </div>
+      <figcaption>North up. Deck 0.9 m above the roof, so it counts as elevated (≥ 0.8 m per EB 105). Shaded wedges are the approach and departure surfaces. Floodlights on the stair tower aim down at the pad. The tag's bit pattern here is illustrative only.</figcaption>
+    </figure>
+    <aside class="card notes">
+      <h3>Dimensions</h3>
+      <dl class="spec">
+        <dt>TLOF</dt><dd>1.0 × 1.0 m · 1 D</dd>
+        <dt>FATO</dt><dd>2.0 × 2.0 m · 2 D</dd>
+        <dt>Safety</dt><dd>3.0 × 3.0 m · 3 D</dd>
+        <dt>Ring</dt><dd>inner Ø 0.5 m · 0.5 D (EASA)</dd>
+        <dt>Tag</dt><dd>0.24 m edge · 0.30 m with border</dd>
+        <dt>Limits</dt><dd>“2 / D1” box, TLOF lower-right</dd>
+      </dl>
+      <h3>Palette</h3>
+      <p><span class="sw" style="background:#f6f5f0"></span>Marking white &nbsp; <span class="sw" style="background:#f0c02e"></span>Ring yellow<br><span class="sw" style="background:#2a5bd7"></span>Ident blue &nbsp; <span class="sw" style="background:#2fd16b"></span>Aviation green<br><span class="sw" style="background:#f07a1a"></span>Windsock orange/white, 5 bands</p>
+      <h3>Why the tag goes here</h3>
+      <p>A real pad already has an aim mark: the touchdown ring. Placing the tag inside it gives the vertiport a machine-readable aim point without adding anything that looks out of place. The “V” stays in the FATO on the approach side, so the detector never sees it next to the tag.</p>
+      <p><span class="tag">COPY</span> <span class="tag">SIMPLIFY</span> <span class="tag">OUT OF SCOPE</span>: see the scaling table in the research note.</p>
+    </aside>
+  </div>
+</section>
+
+<!-- ============ B. SIDE PROFILE ============ -->
+<section id="profile">
+  <div class="sec-head"><span class="n">B</span><h2>Approach, descent and go-around profile</h2></div>
+  <div class="grid">
+    <figure class="card" style="margin:0">
+      <div class="fig">
+      <svg viewBox="0 0 880 430" role="img" aria-labelledby="profT">
+        <title id="profT">Side view looking west: approach from the south, vertical descent, decision gate and the abort climb with go-around</title>
+        <!-- grid: 36 px per metre, origin x=620 (pad centre), y=360 (deck) -->
+        <g stroke="var(--rule)" stroke-width="1">
+          <path d="M20 360H860M20 324H860M20 288H860M20 252H860M20 216H860M20 180H860M20 144H860M20 108H860M20 72H860M20 36H860" opacity=".7"/>
+        </g>
+        <g class="tm" font-size="11">
+          <text x="24" y="356">0 m</text><text x="24" y="284">2</text><text x="24" y="212">4</text><text x="24" y="140">6</text><text x="24" y="68">8</text>
+        </g>
+        <!-- building -->
+        <rect x="80" y="392" width="780" height="38" fill="var(--parapet)"/>
+        <rect x="80" y="386" width="780" height="6" fill="var(--roof-line)"/>
+        <text class="tm" x="92" y="414" font-size="11">ROOF DECK</text>
+        <!-- OFV: vertical to h1=2 m, 1:1 funnel above -->
+        <path d="M566 360 V288 L350 72 H860 V102 L674 288 V360 Z" fill="var(--ofv)" stroke="none"/>
+        <path d="M566 360 V288 L350 72 M674 360 V288 L860 102" fill="none" stroke="var(--ofv-line)" stroke-width="1.3" stroke-dasharray="5 4"/>
+        <text class="tm" x="560" y="330" font-size="11" text-anchor="end" style="fill:var(--ofv-line)">h1 2 m</text>
+        <text class="tm" x="400" y="100" font-size="11.5" style="fill:var(--ofv-line)">OBSTACLE-FREE VOLUME (EASA-style, scaled)</text>
+        <!-- 8:1 approach surface from FATO edge (x=-1 m → 584) -->
+        <path d="M584 360 L44 292.5" stroke="var(--wedge-line)" stroke-width="1.5" stroke-dasharray="8 5"/>
+        <text class="tm" x="120" y="290" font-size="11.5" style="fill:var(--wedge-line)" transform="rotate(-7.1 120 290)">8:1 APPROACH SURFACE · obstacles stay below</text>
+        <!-- deck / pad -->
+        <rect x="566" y="356" width="108" height="6" fill="var(--deck-sa)"/>
+        <rect x="584" y="355" width="72" height="5" fill="var(--deck)"/>
+        <rect x="602" y="354" width="36" height="4" fill="var(--tlof)"/>
+        <path d="M574 362 V386 M610 362 V386 M630 362 V386 M666 362 V386" stroke="var(--parapet)" stroke-width="4"/>
+        <path d="M548 364 H566 M674 364 H692" stroke="var(--ink-3)" stroke-width="2" stroke-dasharray="2 2"/>
+        <circle cx="603" cy="353" r="2.2" fill="#2fd16b"/><circle cx="637" cy="353" r="2.2" fill="#2fd16b"/>
+        <!-- windsock -->
+        <path d="M770 386 V343" stroke="var(--ink-2)" stroke-width="2"/>
+        <path d="M770 344 L784 346 L784 352 L770 354 Z" fill="#f07a1a"/>
+        <!-- parapet / HVAC (below surface) -->
+        <rect x="200" y="368" width="60" height="18" fill="var(--parapet)"/><text class="tm" x="230" y="364" font-size="10.5" text-anchor="middle">HVAC 0.5 m</text>
+        <!-- APPROACH path -->
+        <path d="M188 108 L620 180" fill="none" stroke="var(--cyan)" stroke-width="2.4"/>
+        <path d="M188 108 m-16 0 a16 7 0 1 0 32 0 a16 7 0 1 0 -32 0" fill="none" stroke="var(--cyan)" stroke-width="1.6" stroke-dasharray="3 3"/>
+        <!-- DESCEND -->
+        <path d="M620 180 V352" fill="none" stroke="var(--cyan)" stroke-width="2.4"/>
+        <path d="M614 340 L620 352 L626 340" fill="none" stroke="var(--cyan)" stroke-width="2"/>
+        <!-- decision gate -->
+        <path d="M560 306 H700" stroke="var(--ink)" stroke-width="1.4" stroke-dasharray="1 3"/>
+        <text class="t" x="706" y="303" font-size="12.5" font-weight="600">Decision gate 1.5 m</text>
+        <text class="tm" x="706" y="318" font-size="11">below: committed to land</text>
+        <!-- ABORT: from 2.8 m climb to 6 m, depart north (right) climbing -->
+        <path d="M620 259 C632 240, 634 200, 634 152 C634 130, 700 108, 850 72" fill="none" stroke="var(--amber)" stroke-width="2.4" stroke-dasharray="7 5"/>
+        <path d="M842 66 L852 72 L840 78" fill="none" stroke="var(--amber)" stroke-width="2"/>
+        <circle cx="620" cy="259" r="5" fill="var(--bg)" stroke="var(--red)" stroke-width="2"/>
+        <path d="M617 256l6 6m0-6l-6 6" stroke="var(--red)" stroke-width="1.6"/>
+        <circle cx="634" cy="144" r="10" fill="none" stroke="var(--amber)" stroke-width="1.4" stroke-dasharray="2 3"/>
+        <!-- copter icon mid-descent -->
+        <g transform="translate(620 222)">
+          <rect x="-9" y="-3" width="18" height="6" rx="2" fill="var(--ink)"/>
+          <path d="M-20 -6 H-6 M6 -6 H20" stroke="var(--ink)" stroke-width="2"/>
+          <path d="M-13 -6 V-3 M13 -6 V-3" stroke="var(--ink)" stroke-width="2"/>
+          <path d="M-6 3 L-10 8 M6 3 L10 8" stroke="var(--ink)" stroke-width="1.5"/>
+          <path d="M0 3 L-14 40 M0 3 L14 40" stroke="var(--cyan)" stroke-width=".8" opacity=".6"/>
+        </g>
+        <!-- state labels -->
+        <g font-size="12.5">
+          <text class="t" x="150" y="86" font-weight="700" style="fill:var(--cyan)">SEARCH</text>
+          <text class="tm" x="150" y="140" font-size="11">loiter 7 m · scan for tag</text>
+          <text class="t" x="370" y="128" font-weight="700" style="fill:var(--cyan)" transform="rotate(9.5 370 128)">APPROACH</text>
+          <text class="t" x="530" y="196" font-weight="700" text-anchor="end" style="fill:var(--cyan)">DESCEND</text>
+          <text class="tm" x="530" y="211" font-size="11" text-anchor="end">vertical, precision landing on</text>
+          <text class="tm" x="530" y="225" font-size="11" text-anchor="end">LANDING_TARGET</text>
+          <text class="t" x="604" y="262" font-weight="700" text-anchor="end" style="fill:var(--red)">ABORT</text>
+          <text class="tm" x="604" y="276" font-size="11" text-anchor="end">tag lost / low confidence</text>
+          <text class="t" x="652" y="140" font-weight="700" style="fill:var(--amber)">HOLD 6 m</text>
+          <text class="tm" x="652" y="154" font-size="11">re-acquire or go around</text>
+          <text class="t" x="700" y="58" font-weight="700" style="fill:var(--amber)">GO-AROUND</text>
+          <text class="tm" x="700" y="44" font-size="11">depart on preferred path</text>
+          <text class="t" x="640" y="346" font-weight="700" style="fill:var(--lit)">LANDED</text>
+        </g>
+        <!-- horizontal scale -->
+        <g transform="translate(404 410)" class="tm" font-size="10.5">
+          <path d="M0 0 H72 M0 -4 V4 M36 -3 V3 M72 -4 V4" stroke="var(--ink)" stroke-width="1.4"/>
+          <text x="36" y="16" text-anchor="middle">2 m · 1:1 scale</text>
+        </g>
+      </svg>
+      </div>
+      <figcaption>Side view, looking west, drawn at 1:1 scale. Heights (7 m search, 6 m hold, 1.5 m gate) are <b>placeholders</b>: the real thresholds belong to <code>safety.py</code>, which is Collin's piece in M3. Real vertiports also use shallow 8:1–15:1 approaches. A small copter in a rooftop OFV drops vertically instead.</figcaption>
+    </figure>
+    <aside class="card notes">
+      <h3>State machine (overlay names)</h3>
+      <dl class="spec">
+        <dt style="color:var(--cyan)">SEARCH</dt><dd>Loiter near the pad until the tag is valid for N frames.</dd>
+        <dt style="color:var(--cyan)">APPROACH</dt><dd>Translate overhead and stay above the approach surface.</dd>
+        <dt style="color:var(--cyan)">DESCEND</dt><dd>Vertical descent with ArduPilot PLND fed by <code>LANDING_TARGET</code>.</dd>
+        <dt style="color:var(--red)">ABORT</dt><dd>Above the gate and the target is lost, confidence drops, or the pad is occupied: climb straight up, then hold or go around.</dd>
+        <dt style="color:var(--lit)">LANDED</dt><dd>Disarmed on the pad and stays down for 5 s. Pass if error ≤ 25 cm.</dd>
+      </dl>
+      <h3>Real-world basis</h3>
+      <p>EB 105 requires an 8:1 approach surface and at least two paths, ideally reciprocal or ≥ 135° apart. EASA's obstacle-free volume rises straight up from the safety area, then flares out as a funnel. That vertical profile is what our drop-in descent uses.</p>
+    </aside>
+  </div>
+</section>
+
+<!-- ============ C. HUD ============ -->
+<section id="hud">
+  <div class="sec-head"><span class="n">C</span><h2>M3 video overlay: downward camera HUD</h2></div>
+  <div class="grid">
+    <figure class="card" style="margin:0">
+      <div class="fig" style="background:#05080b">
+      <svg class="hud" id="hudSvg" viewBox="0 0 1280 720" role="img" aria-labelledby="hudT">
+        <title id="hudT">Mockup of the presentation video overlay over the downward camera image</title>
+        <defs>
+          <radialGradient id="vig" cx=".5" cy=".5" r=".75"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".7"/></radialGradient>
+          <pattern id="roofTex" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="#30353a"/><circle cx="7" cy="9" r="1.4" fill="#3b4147"/><circle cx="27" cy="21" r="1.2" fill="#272b30"/><circle cx="15" cy="33" r="1.3" fill="#3b4147"/></pattern>
+        </defs>
+        <!-- camera image -->
+        <g id="camImg">
+          <rect width="1280" height="720" fill="url(#roofTex)"/>
+          <g id="padImg" transform="translate(700 384) rotate(8)">
+            <rect x="-450" y="-450" width="900" height="900" fill="#1d2023" opacity=".6"/>
+            <rect x="-390" y="-390" width="780" height="780" fill="#4f555c"/>
+            <rect x="-260" y="-260" width="520" height="520" fill="#3c4147"/>
+            <rect x="-260" y="-260" width="520" height="520" fill="none" stroke="#e8e7e1" stroke-width="8" stroke-dasharray="39 39" stroke-dashoffset="19"/>
+            <rect x="-130" y="-130" width="260" height="260" fill="#70757b"/>
+            <rect x="-126" y="-126" width="252" height="252" fill="none" stroke="#efeee8" stroke-width="8"/>
+            <circle r="70" fill="none" stroke="#e9bb2a" stroke-width="10.4"/>
+            <use href="#apriltag" x="-39" y="-39" width="78" height="78"/>
+            <circle cx="0" cy="195" r="31" fill="#2851c2"/>
+            <path d="M-17 178 L0 212 L17 178" fill="none" stroke="#efeee8" stroke-width="6.5"/>
+            <rect x="-32" y="238" width="64" height="11" fill="#efeee8"/>
+            <g id="hudLights"></g>
+          </g>
+          <!-- prop arcs in frame corners -->
+          <path d="M0 0 h150 a150 150 0 0 1 -150 150z M1280 0 h-150 a150 150 0 0 0 150 150z" fill="#0b0d0f" opacity=".55"/>
+          <rect width="1280" height="720" fill="url(#vig)"/>
+        </g>
+
+        <!-- HUD layer -->
+        <g id="hudLayer" fill="#e9f3f6">
+          <!-- frame corners -->
+          <path d="M28 64 V40 H52 M1252 64 V40 H1228 M28 656 V680 H52 M1252 656 V680 H1228" stroke="#e9f3f6" stroke-width="2" fill="none" opacity=".7"/>
+          <!-- top-left meta -->
+          <g transform="translate(44 74)">
+            <circle cx="6" cy="-5" r="6" fill="#ff4a3d" class="blink"/>
+            <text x="20" y="0" font-size="17" font-weight="600" letter-spacing="1.2">CAM ↓ 640×480 · 30 FPS</text>
+            <text x="20" y="24" font-size="14.5" opacity=".75" id="tSim">t_sim 41.27 s · run 2026-11-11_s07</text>
+          </g>
+          <!-- state chips -->
+          <g id="chips" transform="translate(640 56)" text-anchor="middle"></g>
+          <!-- top-right mode -->
+          <g transform="translate(1236 74)" text-anchor="end">
+            <text font-size="17" font-weight="600" letter-spacing="1.5">MODE camera</text>
+            <text y="24" font-size="14.5" opacity=".75">estimate src = camera · truth: eval only</text>
+          </g>
+
+          <!-- crosshair at image centre (aircraft nadir) -->
+          <g transform="translate(640 360)" stroke="#e9f3f6" stroke-width="2" fill="none" opacity=".9">
+            <path d="M-40 0 H-12 M12 0 H40 M0 -40 V-12 M0 12 V40"/>
+            <circle r="4" fill="#e9f3f6" stroke="none"/>
+          </g>
+
+          <!-- detection box (image space, follows the rotated tag) -->
+          <g id="detG">
+            <polygon id="detPoly" points="" fill="rgba(25,230,255,.10)" stroke="#19e6ff" stroke-width="3"/>
+            <g id="detCorners" fill="#19e6ff"></g>
+            <g id="detLabel">
+              <rect x="0" y="0" width="300" height="30" rx="4" fill="rgba(5,12,16,.78)" stroke="#19e6ff" stroke-width="1.2"/>
+              <text x="12" y="21" font-size="15" fill="#19e6ff" font-weight="600" id="detTxt">tag36h11 #0 · 0.24 m · dm 41</text>
+            </g>
+          </g>
+          <g id="searchG" opacity="0">
+            <circle cx="640" cy="360" r="210" fill="none" stroke="#e9f3f6" stroke-width="1.6" stroke-dasharray="4 10" opacity=".55"/>
+            <text x="640" y="604" text-anchor="middle" font-size="18" letter-spacing="3" opacity=".85">SCANNING FOR TARGET…</text>
+          </g>
+          <!-- estimate vs truth markers in image -->
+          <g id="estMark"><circle r="16" fill="none" stroke="#19e6ff" stroke-width="2.5"/><circle r="3" fill="#19e6ff"/></g>
+          <g id="truthMark" stroke="#ffffff" stroke-width="2.5"><path d="M-9 -9 L9 9 M9 -9 L-9 9"/></g>
+          <line id="errLine" stroke="#ffd34d" stroke-width="2" stroke-dasharray="5 4"/>
+
+          <!-- bottom-left: error -->
+          <g transform="translate(40 500)">
+            <rect width="340" height="184" rx="10" fill="rgba(6,10,14,.66)" stroke="rgba(233,243,246,.22)"/>
+            <text x="20" y="32" font-size="14" letter-spacing="2" opacity=".75">HORIZONTAL ERROR · TRUTH</text>
+            <text x="20" y="92" font-size="56" font-weight="600" id="errBig">7.4</text>
+            <text x="138" y="92" font-size="22" opacity=".85" id="errUnit">cm</text>
+            <text x="218" y="66" font-size="14" opacity=".75">est − truth</text>
+            <text x="218" y="90" font-size="22" font-weight="600" fill="#19e6ff" id="estErr">2.1 cm</text>
+            <!-- sparkline 10 s -->
+            <g transform="translate(20 108)">
+              <rect width="300" height="56" fill="rgba(255,255,255,.04)"/>
+              <line x1="0" x2="300" y1="12.25" y2="12.25" stroke="#ff6b5b" stroke-width="1.2" stroke-dasharray="4 4"/>
+              <text x="298" y="9" font-size="11.5" text-anchor="end" fill="#ff8a7d">25 cm pass limit</text>
+              <polyline id="spark" fill="none" stroke="#ffd34d" stroke-width="2.2" points=""/>
+              <text x="0" y="72" font-size="11.5" opacity=".6">−10 s</text><text x="300" y="72" font-size="11.5" text-anchor="end" opacity=".6">now</text>
+            </g>
+          </g>
+
+          <!-- bottom-centre: confidence + telemetry -->
+          <g transform="translate(400 590)">
+            <rect width="480" height="94" rx="10" fill="rgba(6,10,14,.66)" stroke="rgba(233,243,246,.22)"/>
+            <text x="20" y="30" font-size="14" letter-spacing="2" opacity=".75">CONFIDENCE</text>
+            <text x="460" y="30" font-size="18" font-weight="600" text-anchor="end" id="confTxt">0.86</text>
+            <rect x="20" y="42" width="440" height="12" rx="6" fill="rgba(255,255,255,.12)"/>
+            <rect x="20" y="42" width="378" height="12" rx="6" fill="#2fd16b" id="confBar"/>
+            <line x1="284" x2="284" y1="36" y2="60" stroke="#fff" stroke-width="2"/>
+            <text x="284" y="34" font-size="11" text-anchor="middle" opacity=".7">min 0.6</text>
+            <text x="20" y="82" font-size="15" id="telem">AGL 3.21 m · v↓ 0.48 m/s · latency 38 ms · 29.6 Hz</text>
+          </g>
+
+          <!-- bottom-right: inset est vs truth -->
+          <g transform="translate(900 444)">
+            <rect width="340" height="240" rx="10" fill="rgba(6,10,14,.66)" stroke="rgba(233,243,246,.22)"/>
+            <text x="20" y="30" font-size="14" letter-spacing="2" opacity=".75">PAD-CENTRE OFFSET · NED</text>
+            <g transform="translate(170 126)">
+              <circle r="75" fill="none" stroke="#ff6b5b" stroke-width="1.4" stroke-dasharray="4 4"/>
+              <circle r="30" fill="none" stroke="rgba(233,243,246,.35)"/>
+              <path d="M-88 0 H88 M0 -88 V88" stroke="rgba(233,243,246,.18)"/>
+              <text x="54" y="-58" font-size="11.5" fill="#ff8a7d">25 cm</text>
+              <text x="22" y="-24" font-size="11.5" opacity=".6">10</text>
+              <text x="5" y="-78" font-size="11" opacity=".6">N</text>
+              <g id="insetTruth" stroke="#fff" stroke-width="2.2"><path d="M-7 -7 L7 7 M7 -7 L-7 7"/></g>
+              <g id="insetEst"><circle r="7" fill="none" stroke="#19e6ff" stroke-width="2.2"/></g>
+              <circle r="4" fill="#ffd34d"/>
+            </g>
+            <g transform="translate(20 226)" font-size="12">
+              <circle cx="5" cy="-4" r="4" fill="#ffd34d"/><text x="14" y="0">aircraft</text>
+              <circle cx="94" cy="-4" r="5" fill="none" stroke="#19e6ff" stroke-width="2"/><text x="104" y="0">estimate</text>
+              <path d="M188 -9 l9 9 m0 -9 l-9 9" stroke="#fff" stroke-width="2"/><text x="204" y="0">truth</text>
+            </g>
+          </g>
+
+          <!-- banner (ABORT / LANDED) -->
+          <g id="banner" opacity="0">
+            <rect id="bannerBg" x="200" y="132" width="880" height="60" rx="8" fill="#cf3a2c"/>
+            <text id="bannerTxt" x="640" y="170" font-size="21" font-weight="600" text-anchor="middle" letter-spacing="1.2" fill="#fff">ABORT · TARGET LOST 0.8 s · CLIMB TO 6 m</text>
+          </g>
+        </g>
+      </svg>
+      </div>
+      <div class="hud-controls" role="group" aria-label="Preview HUD state">
+        <button type="button" data-state="SEARCH">SEARCH</button>
+        <button type="button" data-state="APPROACH">APPROACH</button>
+        <button type="button" data-state="DESCEND" aria-pressed="true">DESCEND</button>
+        <button type="button" data-state="ABORT">ABORT</button>
+        <button type="button" data-state="LANDED">LANDED</button>
+        <span class="sp"></span>
+        <label><input type="checkbox" id="liveChk" checked> live jitter</label>
+      </div>
+      <figcaption>16:9 frame at 1280×720. The HUD keeps its own dark styling in both page themes because it sits on top of video. The truth markers come from the evaluator and are drawn only in the presentation render. In <code>camera</code> mode the controller never sees them, and the validator checks this.</figcaption>
+    </figure>
+    <aside class="card notes">
+      <h3>HUD elements</h3>
+      <dl class="spec">
+        <dt style="color:var(--cyan)">Box</dt><dd>Detected tag quad, corner ticks, id, size and decision margin.</dd>
+        <dt>Markers</dt><dd>Ring = estimated pad centre, ✕ = truth, dashed line = estimate error.</dd>
+        <dt>Error</dt><dd>Live horizontal error vs truth in cm, plus est − truth and a 10 s sparkline against the 25 cm limit.</dd>
+        <dt>State</dt><dd>Five chips. ABORT and LANDED also show a banner.</dd>
+        <dt>Confidence</dt><dd>0–1 bar with the minimum threshold tick. It turns amber, then red, as it falls.</dd>
+        <dt>Inset</dt><dd>Top-down offset in NED: aircraft at centre, rings at 10 and 25 cm.</dd>
+      </dl>
+      <h3>Data it needs</h3>
+      <p>Everything comes from the run directory: the <code>TargetEstimate</code> stream (valid, confidence, position, latency), the mission state, simulator truth (evaluation only) and detector corners per frame. Rendering happens after the flight, so the HUD can never feed back into control.</p>
+      <h3>Colour logic</h3>
+      <p><span class="sw" style="background:#19e6ff"></span>perception &nbsp;<span class="sw" style="background:#fff"></span>truth &nbsp;<span class="sw" style="background:#ffd34d"></span>aircraft/error<br><span class="sw" style="background:#2fd16b"></span>good &nbsp;<span class="sw" style="background:#f2a516"></span>caution &nbsp;<span class="sw" style="background:#cf3a2c"></span>abort / limit</p>
+    </aside>
+  </div>
+</section>
+
+<footer>
+  Drawings are original and based on public guidance: FAA Engineering Brief 105 (2022) and EB 105A (2024), FAA draft AC 150/5390-4 (2026) and EASA PTS-VPT-DSN (2022). Values not confirmed against primary text are marked UNVERIFIED in <code>docs/research/vertiport-design.md</code>. Simulation-only concept, not for real-world design.
+</footer>
+</div>
+
+<script>
+(function(){
+  // ---- theme toggle ----
+  var root=document.documentElement, btn=document.getElementById('themeBtn');
+  try{var saved=localStorage.getItem('vp-theme'); if(saved) root.setAttribute('data-theme',saved);}catch(e){}
+  btn.addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    var next=cur==='dark'?'light':'dark'; root.setAttribute('data-theme',next);
+    try{localStorage.setItem('vp-theme',next);}catch(e){}
+  });
+
+  var NS='http://www.w3.org/2000/svg';
+  function el(tag,attrs,parent){var n=document.createElementNS(NS,tag);for(var k in attrs)n.setAttribute(k,attrs[k]);if(parent)parent.appendChild(n);return n;}
+
+  // ---- tag symbol: 10x10 cells, white quiet zone, black border, 6x6 data (illustrative bits) ----
+  var bits='101100011010110111001010011101100110', g=document.getElementById('tagbits');
+  for(var i=1;i<9;i++)for(var j=1;j<9;j++){
+    var border=(i===1||i===8||j===1||j===8), on=border?true:bits[(i-2)*6+(j-2)]==='1';
+    if(on) el('rect',{x:j,y:i,width:1.02,height:1.02},g);
+  }
+
+  // ---- plan lights ----
+  function light(parent,x,y,r){el('circle',{cx:x,cy:y,r:r*3,fill:'url(#glow)'},parent);el('circle',{cx:x,cy:y,r:r,fill:'#2fd16b',stroke:'#0f5e2f','stroke-width':.6},parent);}
+  var tl=document.getElementById('tlofLights'), p=[320,350,380,410,440];
+  p.forEach(function(v){light(tl,v,267.6,3);light(tl,v,392.4,3);});
+  [350,380,410].forEach(function(v){light(tl,317.6,v,3);light(tl,442.4,v,3);});
+  var fl=document.getElementById('fatoLights');
+  [[257.6,207.6],[380,207.6],[502.4,207.6],[257.6,330],[502.4,330],[257.6,452.4],[380,452.4],[502.4,452.4]].forEach(function(q){light(fl,q[0],q[1],3.4);});
+  var hl=document.getElementById('hudLights');
+  [-130,-65,0,65,130].forEach(function(v){light(hl,v,-136,5);light(hl,v,136,5);});
+  [-65,0,65].forEach(function(v){light(hl,-136,v,5);light(hl,136,v,5);});
+
+  // ---- HUD ----
+  var STATES=['SEARCH','APPROACH','DESCEND','ABORT','LANDED'];
+  var chips=document.getElementById('chips'), chipEls={};
+  var cw=108, gap=8, x0=-(STATES.length*cw+(STATES.length-1)*gap)/2;
+  STATES.forEach(function(s,k){
+    var gg=el('g',{transform:'translate('+(x0+k*(cw+gap)+cw/2)+' 0)'},chips);
+    var r=el('rect',{x:-cw/2,y:-4,width:cw,height:34,rx:6,fill:'rgba(6,10,14,.6)',stroke:'rgba(233,243,246,.3)'},gg);
+    var t=el('text',{y:19,'font-size':14,'font-weight':600,'letter-spacing':1,fill:'#e9f3f6'},gg); t.textContent=s;
+    chipEls[s]={r:r,t:t};
+  });
+
+  var C={SEARCH:'#e9f3f6',APPROACH:'#19e6ff',DESCEND:'#19e6ff',ABORT:'#ff4a3d',LANDED:'#2fd16b'};
+  var D={
+    SEARCH:  {det:false,alt:7.02,vz:0.00,conf:0.00,err:142,ee:null,ox:-180,oy:-120,banner:null},
+    APPROACH:{det:true, alt:6.10,vz:0.05,conf:0.71,err:46.0,ee:5.8,ox:96,oy:44,banner:null},
+    DESCEND: {det:true, alt:3.21,vz:0.48,conf:0.86,err:7.4,ee:2.1,ox:60,oy:24,banner:null},
+    ABORT:   {det:false,alt:2.84,vz:-1.20,conf:0.18,err:19.6,ee:null,ox:120,oy:70,banner:['#cf3a2c','ABORT · TARGET LOST 0.8 s · CLIMB TO 6 m · GO-AROUND']},
+    LANDED:  {det:true, alt:0.00,vz:0.00,conf:0.93,err:6.1,ee:1.4,ox:4,oy:3,banner:['#1d8f4a','LANDED · ERROR 6.1 cm · TOUCHDOWN 0.31 m/s · PASS ≤ 25 cm']}
+  };
+  var state='DESCEND', hist=[], live=true;
+  var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var liveChk=document.getElementById('liveChk'); if(reduce){liveChk.checked=false;live=false;}
+  liveChk.addEventListener('change',function(){live=liveChk.checked;});
+
+  function $(id){return document.getElementById(id);}
+  function rot(x,y,a){var c=Math.cos(a),s=Math.sin(a);return [x*c-y*s,x*s+y*c];}
+  function seedHist(v){hist=[];for(var i=0;i<60;i++)hist.push(v*(1+0.35*Math.sin(i/6))+ (state==='LANDED'?0:(60-i)*0.25));}
+
+  function render(jit){
+    var d=D[state], j=jit||0;
+    STATES.forEach(function(s){var on=s===state, c=chipEls[s];
+      c.r.setAttribute('fill',on?C[s]:'rgba(6,10,14,.6)'); c.r.setAttribute('stroke',on?C[s]:'rgba(233,243,246,.3)');
+      c.t.setAttribute('fill',on?(s==='ABORT'?'#fff':'#061016'):'rgba(233,243,246,.7)');});
+    // pad pose in image: centre = nadir (640,360) + offset (px), scale by altitude
+    var scale=Math.max(0.55,Math.min(1.25,3.2/Math.max(d.alt,0.9)));
+    if(state==='SEARCH')scale=0.42; if(state==='LANDED')scale=1.6;
+    var px=640+d.ox*(1+j*0.02), py=360+d.oy*(1+j*0.02), ang=8;
+    $('padImg').setAttribute('transform','translate('+px+' '+py+') rotate('+ang+') scale('+scale+')');
+    // detection quad around tag (39 px half-size * scale)
+    var h=39*scale, a=ang*Math.PI/180, pts=[[-h,-h],[h,-h],[h,h],[-h,h]].map(function(q){var r=rot(q[0]+j*0.6,q[1]-j*0.4,a);return [px+r[0],py+r[1]];});
+    $('detPoly').setAttribute('points',pts.map(function(q){return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' '));
+    var dc=$('detCorners'); while(dc.firstChild)dc.removeChild(dc.firstChild);
+    pts.forEach(function(q){el('rect',{x:q[0]-5,y:q[1]-5,width:10,height:10},dc);});
+    var lx=Math.max(pts[1][0],pts[2][0])+18, ly=Math.min(pts[0][1],pts[1][1])-36;
+    $('detLabel').setAttribute('transform','translate('+Math.min(lx,940)+' '+Math.max(ly,110)+')');
+    $('detTxt').textContent='tag36h11 #0 · 0.24 m · dm '+(30+d.conf*14+j*1.5).toFixed(0);
+    $('detG').setAttribute('opacity',d.det?1:0);
+    $('searchG').setAttribute('opacity',state==='SEARCH'?1:0);
+    // est vs truth: truth = pad centre; estimate offset by ee
+    var ee=d.ee==null?null:d.ee*(1+j*0.15);
+    $('truthMark').setAttribute('transform','translate('+px+' '+py+')');
+    $('truthMark').setAttribute('opacity',state==='SEARCH'?0:1);
+    if(ee!=null){var ex=px+ee*3.2*scale, ey=py-ee*2.1*scale;
+      $('estMark').setAttribute('transform','translate('+ex+' '+ey+')');$('estMark').setAttribute('opacity',1);
+      $('errLine').setAttribute('opacity',1);}else{$('estMark').setAttribute('opacity',0);}
+    $('errLine').setAttribute('x1',640);$('errLine').setAttribute('y1',360);$('errLine').setAttribute('x2',px);$('errLine').setAttribute('y2',py);
+    $('errLine').setAttribute('opacity',state==='SEARCH'?0:1);
+    // numbers
+    var err=d.err*(1+j*0.06);
+    $('errBig').textContent=state==='SEARCH'?'—':(err>=100?err.toFixed(0):err.toFixed(1));
+    $('errBig').setAttribute('fill',err>25?'#ff6b5b':'#e9f3f6');
+    try{$('errUnit').setAttribute('x',(28+$('errBig').getComputedTextLength()).toFixed(0));}catch(e){}
+    $('estErr').textContent=ee==null?'no est.':ee.toFixed(1)+' cm';
+    var conf=Math.max(0,Math.min(1,d.conf+(d.conf>0?j*0.02:0)));
+    $('confTxt').textContent=conf.toFixed(2);
+    $('confBar').setAttribute('width',(440*conf).toFixed(1));
+    $('confBar').setAttribute('fill',conf>=0.6?'#2fd16b':conf>=0.4?'#f2a516':'#ff4a3d');
+    var alt=d.alt;
+    $('telem').textContent='AGL '+alt.toFixed(2)+' m · v↓ '+d.vz.toFixed(2)+' m/s · latency '+(d.det?(38+j*4).toFixed(0)+' ms':'—')+' · 29.6 Hz';
+    // inset (1 cm = 3 px; 25 cm = 75 px)
+    var k=3.0, tx=Math.max(-80,Math.min(80,d.ox/12*k*3)), ty=Math.max(-80,Math.min(80,d.oy/12*k*3));
+    var tn=Math.hypot(tx,ty)||1, want=Math.min(err,26)*k; tx=tx/tn*want; ty=ty/tn*want;
+    $('insetTruth').setAttribute('transform','translate('+tx.toFixed(1)+' '+ty.toFixed(1)+')');
+    $('insetTruth').setAttribute('opacity',state==='SEARCH'?0:1);
+    if(ee!=null){$('insetEst').setAttribute('transform','translate('+(tx+ee*k*0.8).toFixed(1)+' '+(ty-ee*k*0.6).toFixed(1)+')');$('insetEst').setAttribute('opacity',1);}else $('insetEst').setAttribute('opacity',0);
+    // sparkline (0..30 cm mapped to 56..0; 25 cm → y=14 approx)
+    var pts2=hist.map(function(v,i){var y=56-Math.min(v,32)/32*56*1.0; return (i*300/(hist.length-1)).toFixed(1)+','+Math.max(0,y+ (v>25?0:0)).toFixed(1);});
+    $('spark').setAttribute('points',pts2.join(' '));
+    // banner
+    var b=d.banner; $('banner').setAttribute('opacity',b?1:0);
+    if(b){$('bannerBg').setAttribute('fill',b[0]);$('bannerTxt').textContent=b[1];}
+    $('tSim').textContent='t_sim '+(41.27+tick*0.12).toFixed(2)+' s · run 2026-11-11_s07';
+  }
+  var tick=0;
+  document.querySelectorAll('.hud-controls button').forEach(function(b){
+    b.addEventListener('click',function(){
+      state=b.getAttribute('data-state');
+      document.querySelectorAll('.hud-controls button').forEach(function(x){x.setAttribute('aria-pressed',x===b?'true':'false');});
+      seedHist(D[state].err); render(0);
+    });
+  });
+  seedHist(D[state].err); render(0);
+  setInterval(function(){
+    if(!live||document.hidden)return; tick++;
+    var j=Math.sin(tick*0.7)*0.6+Math.sin(tick*1.9)*0.4;
+    hist.push(D[state].err*(1+j*0.06)); if(hist.length>60)hist.shift();
+    render(j);
+  },140);
+})();
+</script>
+</body>
+</html>
