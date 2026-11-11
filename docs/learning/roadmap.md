@@ -7,7 +7,7 @@ It is written in ASD-STE100 Simplified Technical English.
 
 - Do one study step in each session. Each step takes 30–60 min.
 - Stop at the end of a step. Write a two-line note: "what I did" and "next step".
-- Do the study steps for a milestone before you start your piece in that milestone.
+- For M1, use `docs/learning/m1-sessions.md`. It puts doing before reading. For later milestones, do the study steps for a milestone before you start your piece (this rule is under review).
 - Use the check-yourself questions to find gaps. Do not search for the answers in the code.
 - If a resource is too difficult, skip it. Come back to it after the next step.
 
@@ -61,7 +61,7 @@ The study time is the sum of the study steps. The stretch section has 10 more re
 ### Your piece
 
 `mission.py`: connect, arm, GUIDED takeoff to 5 m, hold 5 s, land, wait for disarm.
-The agents give you a skeleton, failing tests, a primer and a hint ladder.
+The agents give you a skeleton (`mission.py` in the pilot repository), step-tagged failing tests, a primer and a hint ladder.
 
 ### Resources
 
@@ -70,9 +70,9 @@ The agents give you a skeleton, failing tests, a primer and a hint ladder.
 | 1.1 | [ArduPilot — SITL simulator](https://ardupilot.org/dev/docs/sitl-simulator-software-in-the-loop.html) | Overview and the diagram of the parts | 30 min |
 | 1.2 | [MAVLink — Overview](https://mavlink.io/en/about/overview.html) | The full page | 20 min |
 | 1.3 | [MAVLink — Command protocol](https://mavlink.io/en/services/command.html) | `COMMAND_LONG`, `COMMAND_ACK`, result codes | 20 min |
-| 1.4 | [MAVLink — Python (pymavlink) guide](https://mavlink.io/en/mavgen_python/) | Connect, receive messages, send messages | 40 min |
+| 1.4 | [MAVLink — Python (pymavlink) guide](https://mavlink.io/en/mavgen_python/) | Optional in M1. Read only the message names and fields. Your mission uses the `ap` object, not pymavlink. | 15 min |
 | 1.5 | [ArduPilot — Copter commands in GUIDED mode](https://ardupilot.org/dev/docs/copter-commands-in-guided-mode.html) | Arm, takeoff and mode commands | 30 min |
-| 1.6 | [Refactoring Guru — State pattern](https://refactoring.guru/design-patterns/state) | "Problem" and "Solution" parts only | 20 min |
+| 1.6 | [Refactoring Guru — State pattern](https://refactoring.guru/design-patterns/state) | Optional. A linear mission needs an enum and a loop, not one class for each state. | 20 min |
 
 Extra (optional): [ArduSub — pymavlink examples](https://www.ardusub.com/developers/pymavlink.html).
 It is for a submarine, but the MAVLink calls are the same. Do not copy its mission logic.
@@ -84,7 +84,7 @@ It is for a submarine, but the MAVLink calls are the same. Do not copy its missi
 | 1 | 40 min | Read Primer 00. Then read resource 1.1. | Draw the SITL loop from memory. |
 | 2 | 40 min | Do explainer 01. Read resource 1.2. | Name the parts of a MAVLink packet. |
 | 3 | 40 min | Read resources 1.3 and 1.5. | List the commands that your mission sends, in order. |
-| 4 | 45 min | Read resource 1.4. Connect to SITL and print 10 `HEARTBEAT` messages with the agent tool. | You see mode and armed state change in the output. |
+| 4 | 45 min | Read resource 1.4. Connect to SITL and run `./learn listen` to print decoded messages. | You see mode and armed state change in the output. |
 | 5 | 30 min | Read resource 1.6. Draw your states and transitions on paper. | Each arrow on your drawing has a condition and a timeout. |
 | 6 | 45 min | Compare your drawing with the skeleton and the failing tests. | You know which test each state must make pass. |
 

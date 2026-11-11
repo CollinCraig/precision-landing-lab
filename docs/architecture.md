@@ -11,7 +11,7 @@ Omarchy laptop (host)
     ├── Gazebo + ardupilot_gazebo plugin   ← 3D world, camera (from M2)
     └── lab/ (Python package)
         ├── link.py        MAVLink connection helpers (pymavlink)
-        ├── mission.py     takeoff / hold / land state machine      [Collin, M1]
+        ├── (mission.py     takeoff / hold / land state machine      [Collin, M1: own repository landing-pilot, loaded with --pilot])
         ├── perception/    AprilTag detection, camera model          [Collin, M2]
         ├── estimate.py    TargetEstimate producers (truth / camera) [Collin, M3]
         ├── guidance.py    sends LANDING_TARGET to ArduPilot

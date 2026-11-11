@@ -1,3 +1,5 @@
+> **Superseded.** The M1 learner flow now follows D-038 and charter v2. Use `docs/learning/m1-sessions.md`, `docs/learning/mastery-gate.md` and `pilot-template/START-HERE.md`. The hint ladder is `hints/step-N/` in the pilot repository, not `hints/m1/`.
+
 # M1 Brief — First flight, no 3D
 
 Status: **draft, awaiting Collin's approval** · Timebox: 2–3 weeks wall-clock

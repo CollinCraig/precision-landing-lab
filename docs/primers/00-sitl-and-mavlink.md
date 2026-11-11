@@ -42,15 +42,16 @@ Your script can't tell the difference, so code written in M1 keeps working in M2
 | `STATUSTEXT` | autopilot → you | Human-readable messages, e.g. why arming failed. |
 | `LANDING_TARGET` | you → autopilot | (M3) "The pad is over there." |
 
-In Python we use **pymavlink**. The connection is plumbing that agents provide.
-It looks roughly like this:
+In M1 the platform gives your mission an object `ap`. The connection and the wire format are plumbing that agents provide.
+You work with decoded messages. It looks roughly like this:
 
 ```python
-from pymavlink import mavutil
-link = mavutil.mavlink_connection("tcp:127.0.0.1:5760")
-link.wait_heartbeat()
-msg = link.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=1)
+msg = ap.receive("GLOBAL_POSITION_INT", 1.0)   # a decoded message, or None after 1 second
+print(msg.pretty())                           # one readable line
 ```
+
+The platform runner talks to SITL over local UDP. You do not use TCP port 5760 or pymavlink in M1.
+See `docs/pilot-interface.md`.
 
 ## Modes and arming
 
@@ -58,7 +59,8 @@ msg = link.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=1)
   from a script." **LAND** means "descend and land here."
 - **Arming** turns the motors on. ArduPilot refuses to arm until its
   **pre-arm checks** pass (e.g. the GPS has a fix and the position estimate is
-  healthy). In SITL that can take a few seconds after start. Wait for it; don't fight it.
+  healthy). In the first real SITL flight this took about 40 seconds after start.
+  The heartbeat said STANDBY the whole time. Look at the GPS, the EKF and STATUSTEXT. Wait for them; don't fight it.
 
 ## Frames: which way is "up"?
 

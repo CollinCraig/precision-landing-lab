@@ -58,6 +58,41 @@ def validate_metadata(meta):
         raise ValueError("invalid host")
 
 
+# Diagnostic message types (D-038, review A-01/A-02). They reach the mission and are
+# recorded in aux.tlog. The accepted flight.tlog (run format v1) stays HEARTBEAT and
+# GLOBAL_POSITION_INT only. name -> (message id, CRC extra)
+DIAG_TYPES = {"SYS_STATUS": (1, 124), "GPS_RAW_INT": (24, 24), "COMMAND_ACK": (77, 143),
+              "EKF_STATUS_REPORT": (193, 71), "STATUSTEXT": (253, 83)}
+RECEIVE_TYPES = ("HEARTBEAT", "GLOBAL_POSITION_INT") + tuple(DIAG_TYPES)
+DIAG_BY_ID = {msgid: name for name, (msgid, _) in DIAG_TYPES.items()}
+AUX_LIMIT = 8 * 1024 * 1024
+
+
+def diag_id(packet):
+    """Return the message id of a diagnostic packet from 1/1, else None. Never raise.
+
+    A malformed diagnostic packet is ignored. It must not stop a run.
+    """
+    try:
+        p = bytes(packet)
+        v2 = p[0] == 0xFD
+        if p[0] not in (0xFE, 0xFD) or (v2 and p[2] & 1):
+            return None
+        header = 10 if v2 else 6
+        msgid = int.from_bytes(p[7:10], "little") if v2 else p[5]
+        sysid, compid = (p[5], p[6]) if v2 else (p[3], p[4])
+        if msgid not in DIAG_BY_ID or (sysid, compid) != (1, 1) or len(p) != header + p[1] + 2:
+            return None
+        crc = 0xFFFF
+        for b in p[1:-2] + bytes([DIAG_TYPES[DIAG_BY_ID[msgid]][1]]):
+            tmp = b ^ (crc & 255)
+            tmp ^= (tmp << 4) & 255
+            crc = (crc >> 8) ^ (tmp << 8) ^ (tmp << 3) ^ (tmp >> 4)
+        return msgid if crc & 0xFFFF == int.from_bytes(p[-2:], "little") else None
+    except (IndexError, TypeError):
+        return None
+
+
 def packet_info(packet):
     """Validate the accepted subset without repairing or reserializing packets.
 
@@ -120,6 +155,8 @@ class Evidence:
         self.finished = False
         self.event_bytes = 0
         self.tlog = (self.path / "flight.tlog").open("xb")
+        # Sidecar for diagnostic messages. It is outside the strict run format.
+        self.aux = (self.path / "aux.tlog").open("xb")
 
     def elapsed(self):
         return max(self.last, (self.clock() - self.origin) // 1000)
@@ -160,6 +197,12 @@ class Evidence:
         self.seen.add(msgid)
         return msgid
 
+    def record_aux(self, packet):
+        """Write a diagnostic packet to aux.tlog. Stop quietly at the size limit."""
+        if self.aux.closed or self.aux.tell() + 8 + len(packet) > AUX_LIMIT:
+            return
+        self.aux.write(struct.pack(">Q", self.start + self.elapsed()) + bytes(packet))
+
     def finish(self, failure=None):
         if self.finished:
             raise RuntimeError("evidence already finalized")
@@ -173,6 +216,8 @@ class Evidence:
         self.tlog.flush()
         os.fsync(self.tlog.fileno())
         self.tlog.close()
+        self.aux.flush()
+        self.aux.close()
         result = {k: self.manifest[k] for k in ("schema_version", "run_id", "seed", "scenario", "mode")}
         result.update(success=failure is None, failure_reason=None if failure is None else {"code": failure.code, "detail": failure.detail}, duration_us=duration, tlog_records=self.count,
                       events=self.events + [{"t_us": duration, "kind": "run_succeeded" if failure is None else "run_failed", "source": "runner"}])
@@ -211,7 +256,7 @@ class Connection:
         self.last_heartbeat = None
 
     def receive(self, message=None, timeout=1.0):
-        if message not in (None, "HEARTBEAT", "GLOBAL_POSITION_INT") or not 0 <= timeout <= 5:
+        if message not in (None,) + RECEIVE_TYPES or not 0 <= timeout <= 5:
             raise RunFailure("runner_error", "receive expects an M1 message type and timeout in [0,5]")
         deadline = self.clock() + timeout
         while True:
@@ -225,9 +270,13 @@ class Connection:
                 raise RunFailure("connection_failed", f"Receiving telemetry: {type(exc).__name__}: {exc}") from exc
             if packet is not None:
                 msgid = self.evidence.record(packet)
+                if msgid is None:
+                    msgid = diag_id(packet)
+                    if msgid is not None:
+                        self.evidence.record_aux(packet)
                 if msgid == 0:
                     self.last_heartbeat = self.clock()
-                name = {0: "HEARTBEAT", 33: "GLOBAL_POSITION_INT"}.get(msgid)
+                name = {0: "HEARTBEAT", 33: "GLOBAL_POSITION_INT", **DIAG_BY_ID}.get(msgid)
                 if name and message in (None, name):
                     return {"type": name, "packet": packet}
             if self.clock() >= deadline:

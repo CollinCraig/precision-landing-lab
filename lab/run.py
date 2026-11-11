@@ -15,7 +15,8 @@ import subprocess
 import time
 from pathlib import Path
 
-from .link import Connection, Evidence, RunFailure, open_link
+from .link import Connection, Evidence, RECEIVE_TYPES, RunFailure, open_link
+from .pilot_api import PROFILES, pilot_command
 from .power import WallPowerGuard
 
 
@@ -65,13 +66,14 @@ def child_status(process):
 
 
 def run(root, metadata, command, *, endpoint="udpin:127.0.0.1:14550",
-        timeout=60, factory=open_link, guard=None):
+        timeout=60, factory=open_link, guard=None, env=None):
     """Return (run_path, result). No existing directory is ever modified.
 
     guard(phase, process) runs at before_connect, before_launch, and poll;
     process is None until launched. Raise RunFailure to refuse/abort. Factory
     and transport methods must be nonblocking. The timeout covers setup and
     mission work; cleanup has an additional bounded termination grace.
+    `env` adds variables to the child environment (see lab.pilot_api.pilot_command).
     """
     if not math.isfinite(timeout) or not 0 < timeout <= 86400:
         raise ValueError("timeout must be finite, in (0,86400]")
@@ -137,7 +139,8 @@ def run(root, metadata, command, *, endpoint="udpin:127.0.0.1:14550",
                 launching = True
                 try:
                     process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                               stderr=stderr, start_new_session=True, bufsize=0)
+                                               stderr=stderr, start_new_session=True, bufsize=0,
+                                               env=None if env is None else {**os.environ, **env})
                 finally:
                     launching = False
                 if pending_signal is not None:
@@ -177,7 +180,7 @@ def run(root, metadata, command, *, endpoint="udpin:127.0.0.1:14550",
                             wait = request["timeout"]
                             if type(wait) not in (int, float) or not math.isfinite(wait):
                                 raise ValueError("timeout must be finite numeric seconds")
-                            if request["type"] not in (None, "HEARTBEAT", "GLOBAL_POSITION_INT") or not 0 <= wait <= 5:
+                            if request["type"] not in (None,) + RECEIVE_TYPES or not 0 <= wait <= 5:
                                 raise ValueError("invalid receive type or timeout")
                             received = link.receive(request["type"], wait)
                             reply({"packet": None} if received is None else {
@@ -281,17 +284,28 @@ def main(argv=None):
     parser.add_argument("--container", required=True)
     parser.add_argument("--endpoint", default="udpin:127.0.0.1:14550")
     parser.add_argument("--timeout", type=float, default=60)
+    parser.add_argument("--pilot", help="folder with the owner's mission.py (D-038)")
+    parser.add_argument("--profile", choices=sorted(PROFILES), default="sitl",
+                        help="time budgets for the pilot: sitl (default) or fake")
     parser.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     command = args.command[1:] if args.command[:1] == ["--"] else args.command
+    child_env = None
+    if args.pilot and command:
+        parser.error("use --pilot or a command after --, not both")
+    if args.pilot:
+        try:
+            command, child_env = pilot_command(args.pilot, args.profile)
+        except ValueError as exc:
+            parser.error(str(exc))
     if not command:
-        parser.error("a mission child command is required after --")
+        parser.error("use --pilot <folder>, or give a mission child command after --")
     metadata = dict(run_id=args.run_id, seed=args.seed, scenario={"name": args.scenario}, mode=args.mode,
                     input_sources=args.input_source, versions={"ardupilot": args.ardupilot_version, "container": args.container},
                     git=provenance(), host=socket.gethostname())
     try:
         path, result = run(args.runs, metadata, command, endpoint=args.endpoint, timeout=args.timeout,
-                           guard=WallPowerGuard())
+                           guard=WallPowerGuard(), env=child_env)
     except (ValueError, OSError) as exc:
         parser.exit(2, f"Cannot reserve/finalize run: {exc}\n")
     print(f"{path}: {'success' if result['success'] else result['failure_reason']['code']}")

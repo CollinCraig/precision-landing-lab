@@ -30,7 +30,7 @@ jobs:
       - name: Build plv
         run: cargo build --locked --manifest-path validator/Cargo.toml
       - name: Run unittest suite
-        run: python -m unittest tests.test_runner tests.test_sitl_up tests.test_export_tlog -v
+        run: python -m unittest tests.test_runner tests.test_sitl_up tests.test_export_tlog tests.test_m1_infrastructure tests.test_pilot_api tests.test_learn_cli tests.test_step_checks tests.test_learner_text -v
         env:
           PLV: ${{ github.workspace }}/validator/target/debug/plv
 
