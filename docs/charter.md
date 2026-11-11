@@ -1,12 +1,17 @@
-# Charter — Precision Landing Lab
+# Charter — Precision Landing Lab (Autonomous Vertiport Landing)
 
 Status: **planning** · Owner: Collin Craig · Started 2026-11-10
 
 ## Purpose
 
-A simulation-only lab where one drone finds a landing pad, approaches it and
-lands on it — built so that the owner **learns how it works**, not just that it
-works. Agents build the plumbing; the owner writes the core pieces.
+A simulation-only lab where one aircraft finds a **vertiport** landing pad,
+approaches it and lands on it — or safely aborts and goes around — framed
+around Advanced Air Mobility (AAM). It is built so that the owner **learns how
+it works**, not just that it works. Agents build the plumbing and the
+presentation polish; the owner writes the core pieces.
+
+Audience: the public/open-source community and school. "Impressive" means
+rigor — measured results, safe aborts, honest limitations — shown well.
 
 ## Who does what
 
@@ -41,8 +46,14 @@ In scope:
   guidance path; a custom GUIDED controller is an optional later comparison.
 - A small Rust tool that validates run outputs.
 - Seeded scenarios, metrics, flight videos and reports.
+- First-round polish (agent-built): rooftop vertiport world, presentation
+  video with chase camera + perception/landing overlay, abort & go-around,
+  AAM-style conditions (gusts, GPS noise, occupied pad), per-milestone results page.
 
 Non-goals (for now):
+- Deferred to the post-M5 roadmap (planned later, not built now): VTOL
+  aircraft (QuadPlane), simulated ADS-B traffic, multi-aircraft vertiport
+  operations.
 - Real hardware; Isaac Sim; training a flight controller from scratch;
   learned perception before the simple AprilTag baseline works; a whole-stack
   rewrite in Rust; multi-drone; exact physics reproducibility.

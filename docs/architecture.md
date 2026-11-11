@@ -16,10 +16,12 @@ Omarchy laptop (host)
         ├── estimate.py    TargetEstimate producers (truth / camera) [Collin, M3]
         ├── guidance.py    sends LANDING_TARGET to ArduPilot
         ├── scenarios.py   seeded conditions (pad offset, light, wind)
+        ├── safety.py      abort / go-around decisions               [Collin, M3]
         ├── metrics.py     landing error, touchdown speed, detector stats
         └── run.py         runs a scenario, writes the run directory
 validator/  (Rust crate)   validates a run directory
-reports/                   report + demo page generator (Sonnet)
+reports/                   report, results page, video overlay renderer (Sonnet; Opus accepts)
+worlds/                    Gazebo rooftop vertiport world + assets (licenses tracked)
 runs/<run_id>/             git-ignored outputs
 ```
 
@@ -55,6 +57,8 @@ no estimate with `source=truth`. Exit code 0/1 plus a short report.
 Landed and disarmed **and** horizontal error ≤ 0.25 m **and** touchdown speed
 ≤ 0.5 m/s *(proposed)* **and** finished within 120 s *(proposed)* **and** stays
 disarmed on the ground for 5 s. Any failure records a `failure_reason`.
+A **correct abort** (target lost / low confidence / pad occupied → go-around or
+hold) is recorded separately and is not counted as a crash.
 
 ## Evaluation rules
 

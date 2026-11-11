@@ -19,6 +19,10 @@ Format: ID · decision · why · status. Newest decisions are appended.
 | D-010 | Every milestone ships a flight video. Small summaries in repo; videos/logs stay local (git-ignored); private demo page per milestone; Collin chooses which videos go public. | Remote review from MacBook/iPad without bloating or leaking. | Decided |
 | D-011 | M3 success = within 25 cm of pad center, 8/10 tries, calm. Revisit after M2. | Achievable, measurable target; tighter/windy goals belong to M4. | Decided |
 | D-012 | Two approval stops per milestone (brief at start, demo at end) plus fixed stops (installs/system changes, first public push, build phases). | Keeps work moving between Collin's sessions. | Decided |
+| D-014 | AAM framing: "autonomous vertiport landing". | Real-world purpose; costs little in M0–M3. | Decided |
+| D-015 | First-round upgrades: vertiport world (M2), presentation video with overlay (M3), abort/go-around (M3), AAM conditions (M4), results page per milestone. ~2–3 extra weeks overall. | Traction without delaying first flight; agents build most of it. | Decided |
+| D-016 | VTOL/QuadPlane, simulated ADS-B traffic, multi-aircraft vertiport go to a post-M5 roadmap, planned over time. | Keeps first round finishable at 3–5 h/week. | Decided |
+| D-017 | Audience: public/open source and school. | Shapes README/report tone: clear, honest, results-first. | Decided |
 | D-013 | Repo name `precision-landing-lab`. Local folder name may stay as-is. | Standard community term, discoverable. | Proposed (Collin leaning B) |
 
 ## Proposed defaults (no objection raised)
@@ -49,3 +53,6 @@ Format: ID · decision · why · status. Newest decisions are appended.
 - Touchdown speed and timeout thresholds (proposed in `architecture.md`).
 - Demo page hosting/retention details and video retention policy.
 - Gazebo wind support on the pinned version (before M4).
+- Roadmap feasibility on pinned versions: QuadPlane precision landing, SITL ADS-B traffic simulation.
+- GPU state decides vertiport/video visual fidelity (fallbacks: lighter visuals, StarkPC rendering).
+- How Collin-built vs agent-built work is disclosed publicly.

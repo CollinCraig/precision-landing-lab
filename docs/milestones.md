@@ -27,28 +27,30 @@ land, wait for disarm (state machine skeleton + tests).
 Accept when: 5 consecutive runs pass the validator; video of the altitude
 plot/console replay; Collin can explain each state transition.
 
-## M2 — 3D world + camera (≈3 weeks)
+## M2 — 3D vertiport world + camera (≈4 weeks)
 
-Agents: Gazebo world with an AprilTag pad, downward camera, frame recording,
+Agents: Gazebo rooftop vertiport world with an AprilTag pad, downward camera, frame recording,
 video capture, GPU decision if CPU rendering is too slow.
 **Collin's piece:** detect the tag in recorded frames and compute its position
 in the camera frame (offline mode, scored against truth).
 Accept when: same M1 flight in Gazebo with a video; offline detection report
 with error stats; M3 threshold re-checked.
 
-## M3 — Find & land on the pad (≈4–6 weeks)
+## M3 — Find & land on the vertiport (≈5–7 weeks)
 
 Agents: `LANDING_TARGET` sender, precision-landing parameter setup, truth mode,
-evaluation runner, report page.
+evaluation runner, results page, presentation video (chase camera + overlay of
+detection, estimate, live landing error, ABORT state).
 **Collin's pieces:** (1) frame conversion camera → body → local NED producing a
-`TargetEstimate`; (2) validity/confidence rules and abort conditions.
+`TargetEstimate` with validity/confidence; (2) abort & go-around logic.
 Accept when: **≤ 25 cm, 8/10 runs, calm, camera mode**, validator confirms no
-truth leakage; truth-vs-camera comparison in the report; landing video.
+truth leakage; a correct abort is demonstrated when the target is hidden;
+truth-vs-camera comparison on the results page; presentation landing video.
 
-## M4 — Harder conditions (≈4 weeks)
+## M4 — AAM conditions (≈4 weeks)
 
-Agents: seeded scenarios (lighting, pad offset, wind if supported), batch runs,
-metrics dashboard.
+Agents: seeded scenarios — lighting, pad offset, wind gusts (if supported), GPS
+noise, occupied landing zone (wait or go around) — batch runs, results page.
 **Collin's piece:** design the evaluation seed set and analyze one failure mode.
 Accept when: fixed-seed evaluation report with success rate per condition.
 
@@ -57,6 +59,12 @@ Accept when: fixed-seed evaluation report with success rate per condition.
 Agents: cleanup, README, docs, final report and video.
 **Collin's piece:** write the README "How it works" section in your own words.
 Accept when: full pre-publish checklist passes and Collin approves.
+
+## Roadmap (after M5 — planned over time, nothing built now)
+
+Candidates, each becomes its own milestone only by a new decision:
+VTOL aircraft (ArduPilot QuadPlane), simulated ADS-B traffic and avoidance,
+multi-aircraft vertiport sequencing, replayed real traffic data, learned perception.
 
 ---
 
@@ -99,4 +107,5 @@ Accept when: full pre-publish checklist passes and Collin approves.
 | Subscription limits hit | Pause and ask; no paid fallback. |
 | Learner stalls on a piece | Hint ladder, 30–60 min steps, re-scope at timebox. |
 | Accidental public leak | Pre-publish checklist; `runs/` git-ignored. |
+| Visual polish crowds out learning | Polish is agent-built; Collin's pieces unchanged; Opus caps visual iterations per milestone. |
 | Scope creep (learned perception, Isaac) | Non-goals in charter; new scope = new decision entry. |
