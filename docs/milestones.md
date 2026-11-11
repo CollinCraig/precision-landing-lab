@@ -66,6 +66,7 @@ Accept when: full pre-publish checklist passes and Collin approves.
 Candidates, each becomes its own milestone only by a new decision:
 VTOL aircraft (ArduPilot QuadPlane), simulated ADS-B traffic and avoidance,
 multi-aircraft vertiport sequencing, replayed real traffic data, learned perception.
+Real hardware (owner open to it, budget-conscious, paced with school): owned now: a DJI Mini 2 (manual flight; candidate real-image dataset), a Pitsco Echo Drone (block/JS only) and a webcam. A later candidate is a small ArduPilot/PX4-capable quad with a companion computer, downward camera, rangefinder and optical flow for real precision landing. Research options and costs only after M3, with council input.
 
 ---
 
