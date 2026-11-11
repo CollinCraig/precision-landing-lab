@@ -293,7 +293,7 @@
         throw new Error(e.message + '. A run needs a viewer.json next to result.json (produced by the exporter, see viewer/FORMAT.md).');
       }
       const [result, manifest] = await Promise.all([fetchJson(urls.result, true), fetchJson(urls.manifest, true)]);
-      return { store: parseViewer(raw), result, manifest, label: urls.dir };
+      return { store: parseViewer(raw), result, manifest, label: urls.dir, raw };
     },
     async fromFiles(fileList) {
       const files = Array.from(fileList);
@@ -303,7 +303,7 @@
       if (!vf) throw new Error('Select viewer.json (and optionally result.json and manifest.json) together.');
       const read = async (f) => { if (!f) return null; try { return JSON.parse(await f.text()); } catch (e) { throw new Error(f.name + ' is not valid JSON'); } };
       const [raw, result, manifest] = await Promise.all([read(vf), read(byName['result.json']), read(byName['manifest.json'])]);
-      return { store: parseViewer(raw), result, manifest, label: vf.name };
+      return { store: parseViewer(raw), result, manifest, label: vf.name, raw };
     },
   };
   // M2+: LiveSource = { connect(url, store) } that calls store.append({t,n,e,d,alt,vz,mode,armed,state,hdg}).
@@ -329,8 +329,10 @@
   const state = {
     store: new TelemetryStore(), result: null, manifest: null, summary: null,
     t: 0, dur: 0, playing: false, speed: 1, last: 0, scene: null, events: [], recMode: false, follow: false,
-    lastEvt: '',
+    lastEvt: '', per: null, city: null, cine: null,
   };
+  // presentation: onboard inset (pip), which view fills the card (main), M3 HUD on/off, camera spec
+  const pres = { pip: true, main: 'scene', hud: true, hfov: null, res: null, intr: null, hud3: null, pipOv: null, cineOv: null };
 
   function el(tag, cls, text) {
     const e = document.createElement(tag);
@@ -530,13 +532,17 @@
     }));
     state.summary = summarizeResult(res, bundle.manifest, bundle.store);
     state.t = 0; state.playing = false; state.lastEvt = '';
-    showBanner(bundle.store.length ? '' : 'This run has no telemetry samples (empty series).', 'warn');
+    const pr = root.PLVHud ? root.PLVHud.parsePerception(bundle.raw) : { data: null, warning: null };
+    state.per = pr.data;
+    showBanner(bundle.store.length ? (pr.warning || '') : 'This run has no telemetry samples (empty series).', 'warn');
+    applyCamera();
     if (state.scene) state.scene.setData(bundle.store);
     renderHeader();
     buildBands();
     drawCharts();
     syncPlayButton();
     render();
+    if (state.cine) startCine();
   }
 
   async function loadFromParam(runParam, remember) {
@@ -565,9 +571,11 @@
       items.forEach((it) => { const o = el('option', null, it.label); o.value = it.path; g.appendChild(o); });
       sel.appendChild(g);
     };
-    let samples = [];
-    try { samples = ((await fetchJson('samples/index.json', true)) || {}).samples || []; } catch (e) { /* none */ }
-    add('Sample runs (synthetic)', samples.filter((s) => s && typeof s.path === 'string' && typeof s.label === 'string'));
+    let idx = {};
+    try { idx = (await fetchJson('samples/index.json', true)) || {}; } catch (e) { /* none */ }
+    const ok = (list) => (Array.isArray(list) ? list : []).filter((s) => s && typeof s.path === 'string' && typeof s.label === 'string');
+    add('Sample runs (synthetic)', ok(idx.samples));
+    add('M3 preview (synthetic, proposed v2 data)', ok(idx.previews));
     // Best effort: directory listing from python's http.server at ../runs/ (git-ignored local runs).
     let runs = [];
     try {
@@ -590,13 +598,20 @@
   /* ---------- transport ---------- */
   function syncPlayButton() {
     const b = $('playBtn');
-    b.textContent = state.playing ? 'Pause' : (state.t >= state.dur - 1e-6 && state.dur > 0.01 ? 'Replay' : 'Play');
-    b.setAttribute('aria-pressed', state.playing ? 'true' : 'false');
+    const playing = state.cine ? !state.cine.paused && state.cine.d && state.cine.d.phase !== 'end' : state.playing;
+    b.textContent = playing ? 'Pause' : (state.t >= state.dur - 1e-6 && state.dur > 0.01 ? 'Replay' : 'Play');
+    b.setAttribute('aria-pressed', playing ? 'true' : 'false');
     document.querySelectorAll('#speeds button').forEach((x) => x.setAttribute('aria-pressed', String(+x.dataset.speed === state.speed)));
   }
-  function setTime(t) { state.t = Math.min(Math.max(t, 0), state.dur); render(); syncPlayButton(); }
+  function setTime(t) { if (state.cine) stopCine(); state.t = Math.min(Math.max(t, 0), state.dur); render(); syncPlayButton(); }
   function togglePlay() {
     if (!state.store.length) return;
+    if (state.cine) {
+      const k = state.cine;
+      if (k.d && k.d.phase === 'end') startCine(); else k.paused = !k.paused;
+      syncPlayButton();
+      return;
+    }
     if (!state.playing && state.t >= state.dur - 1e-6) state.t = 0;
     state.playing = !state.playing;
     state.last = performance.now();
@@ -634,11 +649,18 @@
     $('valAlt').textContent = s.alt.toFixed(2) + ' m';
     $('valVz').textContent = (-s.vz >= 0 ? '+' : '−') + Math.abs(s.vz).toFixed(2) + ' m/s';
     if (state.scene) state.scene.update(s, state.playing ? 1 : 0);
+    presentFrame(s, { label: sname || '', color: tokenColor(tok), fg: DARK_TEXT_TOKENS.has(tok) ? '#0d1115' : '#fff' });
   }
 
   function tick(now) {
     const dt = Math.min(0.1, (now - state.last) / 1000);
     state.last = now;
+    if (state.cine) {
+      cineStep(dt);
+      if (state.scene) state.scene.frame(dt, state.cine && state.cine.d.phase === 'play' && !state.cine.paused);
+      requestAnimationFrame(tick);
+      return;
+    }
     if (state.playing) {
       state.t += dt * state.speed;
       if (state.t >= state.dur) { state.t = state.dur; state.playing = false; syncPlayButton(); }
@@ -679,12 +701,188 @@
     $('recBtn').setAttribute('aria-pressed', String(on));
     if (state.scene) state.scene.resize();
     drawCharts();
+    layoutViews();
+  }
+
+  /* ---------- onboard camera, M3 HUD, cinematic mode ---------- */
+  const clampN = (x, a, b) => Math.min(b, Math.max(a, x));
+  function camIntr() {
+    const Hc = root.PLVHud;
+    const pc = state.per && state.per.camera;
+    const w = pres.res ? pres.res[0] : pc ? pc.width : Hc.CAMERA_DEFAULT.width;
+    const h = pres.res ? pres.res[1] : pc ? pc.height : Hc.CAMERA_DEFAULT.height;
+    return Hc.cameraIntrinsics(w, h, pres.hfov || (pc && pc.hfov_deg) || Hc.CAMERA_DEFAULT.hfov_deg);
+  }
+  function applyCamera() {
+    if (!root.PLVHud) return;
+    pres.intr = camIntr();
+    if (state.scene) state.scene.setOnboard({ width: pres.intr.width, height: pres.intr.height, hfov: pres.intr.hfov, mountUp: root.PLVHud.CAMERA_DEFAULT.mount_up_m });
+    if (pres.hud3) pres.hud3.setCamera(pres.intr);
+    if (pres.pipOv) pres.pipOv.setCamera(pres.intr);
+    layoutViews();
+  }
+  /** What is on screen now; cinematic mode overrides the user's view choices. */
+  function effectiveView() {
+    if (state.cine) return { main: 'scene', pip: !!state.cine.pip, hud: false };
+    return { main: pres.main, pip: pres.pip, hud: pres.hud && pres.main === 'onboard' };
+  }
+  const setHidden = (node, on) => { if (on) node.setAttribute('hidden', ''); else node.removeAttribute('hidden'); }; // works for SVG too
+  const place = (node, r) => { node.style.left = r.x + 'px'; node.style.top = r.y + 'px'; node.style.width = r.w + 'px'; node.style.height = r.h + 'px'; };
+  const roundRect = (r) => ({ x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) });
+  function layoutViews() {
+    const card = $('sceneCard'), W = card.clientWidth, Hh = card.clientHeight;
+    if (!W || !Hh || !root.PLVHud) return;
+    const e = effectiveView(), intr = pres.intr || camIntr();
+    const pip = $('pip'), hud = $('m3hud'), tag = $('onbTag');
+    let inset = null, image = null;
+    const lb = state.cine ? Math.max(0, Math.round((Hh - W / 2.0) / 2)) : 0; // cinematic letterbox to 2:1
+    const below = (state.recMode ? 9 : 0) + lb;
+    if (e.main === 'onboard') {
+      const L = root.PLVHud.hudLayout(W, Hh, intr.aspect);
+      image = roundRect(L.image);
+      place(hud, roundRect(L.frame));
+      setHidden(hud, !e.hud);
+      setHidden(tag, e.hud);
+      tag.style.left = (image.x + 12) + 'px'; tag.style.top = (image.y + 12) + 'px';
+      if (e.pip) {
+        const sc = L.frame.scale, iw = Math.max(150, 300 * sc), ih = (iw * 9) / 16;
+        inset = roundRect({ x: L.frame.x + L.frame.w - iw - 40 * sc, y: L.frame.y + (e.hud ? 214 * sc : 14), w: iw, h: ih });
+      }
+    } else {
+      setHidden(hud, true); setHidden(tag, true);
+      if (e.pip) {
+        const iw = clampN(W * 0.25, 150, 360), ih = iw / intr.aspect;
+        inset = roundRect({ x: W - iw - 14, y: Hh - ih - 14 - below, w: iw, h: ih });
+      }
+    }
+    pip.hidden = !inset;
+    if (inset) {
+      place(pip, inset);
+      const sceneIn = e.main === 'onboard';
+      pip.classList.toggle('scene-in', sceneIn);
+      $('pipLabel').textContent = sceneIn ? 'SCENE · ' + String(state.scene ? state.scene.camera : sceneOpts.cam).toUpperCase() : 'ONBOARD ↓';
+      $('pipSub').textContent = sceneIn ? '' : 'SIMULATED PREVIEW';
+      $('pipSvg').style.display = sceneIn ? 'none' : '';
+      $('pipSwap').hidden = !!state.cine;
+    }
+    card.classList.toggle('onb-main', e.main === 'onboard');
+    card.classList.toggle('m3', e.hud);
+    card.classList.toggle('cine-on', !!state.cine);
+    if (pres.cineOv) pres.cineOv.setBars(lb);
+    if (state.scene) state.scene.setViews({ main: e.main, inset, image });
+    syncViewButtons();
+    render();
+  }
+  function syncViewButtons() {
+    $('pipBtn').setAttribute('aria-pressed', String(pres.pip));
+    $('swapBtn').setAttribute('aria-pressed', String(pres.main === 'onboard'));
+    $('hudBtn').setAttribute('aria-pressed', String(pres.hud && pres.main === 'onboard'));
+    $('cineBtn').setAttribute('aria-pressed', String(!!state.cine));
+  }
+  function setPip(on) { if (state.cine) stopCine(); pres.pip = on; layoutViews(); }
+  function swapViews() {
+    if (state.cine) stopCine();
+    pres.main = pres.main === 'onboard' ? 'scene' : 'onboard';
+    if (pres.main === 'scene' && !pres.pip) pres.pip = true;
+    layoutViews();
+  }
+  function toggleHud() {
+    if (state.cine) stopCine();
+    if (pres.main !== 'onboard') { pres.main = 'onboard'; pres.hud = true; } else pres.hud = !pres.hud;
+    layoutViews();
+  }
+
+  /** Per-frame overlay update: M3 HUD, PiP marks, cinematic telemetry chip. */
+  function presentFrame(s, chip) {
+    const Hc = root.PLVHud;
+    if (!Hc || !pres.intr) return;
+    const e = effectiveView();
+    const needHud = e.hud && pres.hud3, needPip = e.pip && e.main === 'scene' && pres.pipOv;
+    if (state.cine && pres.cineOv && state.cine.d) pres.cineOv.update(state.cine.d, { label: chip.label.toUpperCase(), color: chip.color, fg: chip.fg, alt: 'ALT ' + s.alt.toFixed(1) + ' m' });
+    if (!needHud && !needPip) return;
+    const st = state.store, pad = { n: st.pad.n, e: st.pad.e, d: 0 };
+    const res = state.result;
+    const m = Hc.hudModel({
+      sample: s, store: st, per: state.per, result: res, verdict: state.summary.verdict,
+      failure: res && res.failure_reason && typeof res.failure_reason === 'object' ? res.failure_reason.code : null,
+      mode: state.summary.mode, t: state.t, intr: pres.intr, pad,
+      padYawDeg: state.city ? state.city.vertiport.pad.yaw_deg : 0, tagSize: Hc.TAG_BLACK_M, mountUp: Hc.CAMERA_DEFAULT.mount_up_m,
+    });
+    if (needHud) {
+      const tr = state.per && state.per.truth;
+      const pos = tr ? (tt) => Hc.interpAt(tr, ['n', 'e'], tt) : (tt) => st.sampleAt(tt);
+      pres.hud3.update(m, { t: state.t, runId: $('runId').textContent, hist: Hc.offsetHistory(pos, pad, state.t, 10, 0.2) });
+    }
+    if (needPip) pres.pipOv.update(m);
+  }
+
+  function cineContent() {
+    const sum = state.summary, res = state.result || {}, st = state.store, man = state.manifest || {};
+    const runId = $('runId').textContent;
+    const scen = (res.scenario && res.scenario.name) || (man.scenario && man.scenario.name) || '';
+    const synthetic = !!(st.source && st.source.kind === 'synthetic');
+    const vtxt = sum.verdict === 'pass' ? 'PASS' : sum.verdict === 'fail' ? 'FAIL' : 'NO RESULT';
+    const tone = sum.verdict === 'pass' ? '#2fd16b' : sum.verdict === 'fail' ? '#cf3a2c' : '#77818b';
+    const fr = res.failure_reason && typeof res.failure_reason === 'object' ? String(res.failure_reason.code) : '';
+    const metrics = [];
+    if (isNum(res.horizontal_error_m)) metrics.push('error ' + (res.horizontal_error_m * 100).toFixed(1) + ' cm');
+    if (isNum(res.touchdown_speed_mps)) metrics.push('touchdown ' + res.touchdown_speed_mps.toFixed(2) + ' m/s');
+    if (isNum(res.time_to_land_s)) metrics.push('land in ' + res.time_to_land_s.toFixed(1) + ' s');
+    if (!metrics.length) sum.rows.filter((r) => r.derived).forEach((r) => metrics.push(r.k.toLowerCase() + ' ' + r.v + ' *'));
+    const rows = sum.rows.filter((r) => !/^(Detail|Tlog records)$/.test(r.k)).slice(0, 8).map((r) => ({ k: r.k + (r.derived ? ' *' : ''), v: r.v }));
+    return {
+      title: { ey: 'PRECISION LANDING LAB', tt: 'Rooftop vertiport landing', sb: 'Simulation · procedural city, not a real place' },
+      run: { ey: 'RUN', tt: runId, sb: [scen, sum.mode ? 'mode ' + sum.mode : '', isNum(res.seed) ? 'seed ' + res.seed : '', synthetic ? 'synthetic data' : ''].filter(Boolean).join(' · ') },
+      result: { ey: 'RESULT · REPORTED BY THE RUNNER', tt: vtxt + (fr ? ' · ' + fr.replace(/_/g, ' ') : ''), sb: metrics.join(' · '), tone },
+      outro: {
+        ey: 'PRECISION LANDING LAB · REPLAY', tt: runId, verdict: vtxt + (fr ? ' · ' + fr.replace(/_/g, ' ').toUpperCase() : ''), tone, rows,
+        foot: 'Simulation only.' + (synthetic ? ' Synthetic sample data.' : '') + ' PASS/FAIL is the runner\'s reported outcome, not an acceptance decision.' + (rows.some((r) => / \*$/.test(r.k)) ? ' * derived from telemetry.' : ''),
+      },
+    };
+  }
+  function startCine() {
+    if (!state.store.length || !root.PLVCine || !pres.cineOv) return;
+    const st = state.store, lt = st.labelTable();
+    const plan = root.PLVCine.planCine({ dur: state.dur, speed: state.speed, runs: runLengths(st.cols.t, lt.codes, state.dur), names: lt.names });
+    state.cine = { plan, c: 0, cam: null, paused: false, snap: true, pip: false, d: root.PLVCine.cineAt(plan, 0) };
+    state.playing = false; state.t = 0;
+    pres.cineOv.setContent(cineContent());
+    $('cine').hidden = false;
+    if (state.scene) state.scene.setCine(true);
+    layoutViews();
+    syncPlayButton();
+  }
+  function stopCine() {
+    if (!state.cine) return;
+    state.cine = null;
+    $('cine').hidden = true;
+    if (state.scene) { state.scene.setCine(false); state.scene.setCamera(sceneOpts.cam); }
+    layoutViews();
+    syncViewbar();
+    syncPlayButton();
+  }
+  function cineStep(dt) {
+    const k = state.cine;
+    if (!k.paused) k.c += dt;
+    const d = root.PLVCine.cineAt(k.plan, k.c);
+    const wasEnd = k.d && k.d.phase === 'end';
+    k.d = d;
+    if (d.cam !== k.cam) {
+      if (state.scene) state.scene.setCamera(d.cam, k.snap || d.blend === 0, d.blend || undefined);
+      k.cam = d.cam; k.snap = false;
+      if (!$('pip').hidden) layoutViews();
+      syncViewbar();
+    }
+    if (d.pip !== k.pip) { k.pip = d.pip; layoutViews(); }
+    if ((d.phase === 'end') !== wasEnd) syncPlayButton();
+    state.t = d.t;
+    render();
   }
 
   /* ===================== three.js scene (built in world.js) ===================== */
   // World: x = East, y = Up, z = South (right-handed). North is -z. Altitude above the deck = y.
   const sceneOpts = { cam: 'chase', tod: 'day', q: 'high', wind: null };
-  const CAMS = ['chase', 'orbit', 'top', 'city'], TODS = ['day', 'golden', 'dusk'];
+  const CAMS = ['chase', 'orbit', 'top', 'city', 'pad'], TODS = ['day', 'golden', 'dusk'];
 
   function createScene(container, city) {
     if (typeof THREE === 'undefined' || !root.PLVWorld) throw new Error('three.js did not load (offline?). Charts and timeline still work.');
@@ -712,7 +910,7 @@
     mark('#qSeg button', 'q', sc ? sc.quality : sceneOpts.q);
     $('followBtn').hidden = (sc ? sc.camera : sceneOpts.cam) !== 'orbit';
   }
-  function setCam(c) { sceneOpts.cam = c; if (state.scene) state.scene.setCamera(c); syncViewbar(); }
+  function setCam(c) { if (state.cine) stopCine(); sceneOpts.cam = c; if (state.scene) state.scene.setCamera(c); syncViewbar(); if (pres.main === 'onboard') layoutViews(); }
   function setTod(t) { sceneOpts.tod = t; if (state.scene) state.scene.setTimeOfDay(t); syncViewbar(); }
   function setQuality(q) {
     sceneOpts.q = q;
@@ -741,10 +939,27 @@
     if (sp0.cam) sceneOpts.cam = sp0.cam;
     if (sp0.tod) sceneOpts.tod = sp0.tod;
     if (sp0.wind) sceneOpts.wind = sp0.wind;
+    // onboard camera + presentation: pip=0|1, view=onboard, hud=0|1, cfov=<deg>, cres=<w>x<h>
+    pres.pip = params.has('pip') ? params.get('pip') !== '0' : window.innerWidth >= 640;
+    if (params.get('view') === 'onboard') pres.main = 'onboard';
+    if (params.get('hud') === '0') pres.hud = false;
+    const cfov = parseFloat(params.get('cfov'));
+    if (isNum(cfov) && cfov >= 10 && cfov <= 150) pres.hfov = cfov;
+    const cres = /^(\d{2,4})x(\d{2,4})$/.exec(params.get('cres') || '');
+    if (cres) pres.res = [+cres[1], +cres[2]];
+    if (root.PLVPresent) {
+      pres.hud3 = root.PLVPresent.createM3Hud($('m3hud'));
+      pres.pipOv = root.PLVPresent.createPipOverlay($('pipSvg'));
+      pres.cineOv = root.PLVPresent.createCineOverlay($('cine'));
+    }
+    applyCamera();
     const sceneReady = (async () => {
       try {
         const city = await loadCity();
+        state.city = city;
         state.scene = createScene($('scene'), city);
+        if (state.store.length) state.scene.setData(state.store);
+        applyCamera();
         state.scene.onTap = () => { if (state.recMode) togglePlay(); };
         if (state.store.length) state.scene.setData(state.store);
         render();
@@ -753,7 +968,11 @@
       }
       syncViewbar();
     })();
-    root.PLVDebug = { stats: () => (state.scene ? state.scene.stats() : null) };
+    root.PLVDebug = {
+      stats: () => (state.scene ? state.scene.stats() : null),
+      // jump the cinematic clock (seconds) and pause it, for deterministic captures
+      cineSeek: (c) => { if (!state.cine) startCine(); if (state.cine) { state.cine.c = c; state.cine.paused = true; state.cine.snap = true; state.cine.cam = null; } },
+    };
 
     $('themeBtn').addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
     $('recBtn').addEventListener('click', () => setRecMode(!state.recMode));
@@ -764,6 +983,12 @@
     document.querySelectorAll('#camSeg button').forEach((b) => b.addEventListener('click', () => setCam(b.dataset.cam)));
     document.querySelectorAll('#todSeg button').forEach((b) => b.addEventListener('click', () => setTod(b.dataset.tod)));
     document.querySelectorAll('#qSeg button').forEach((b) => b.addEventListener('click', () => setQuality(b.dataset.q)));
+    $('pipBtn').addEventListener('click', () => setPip(!pres.pip));
+    $('swapBtn').addEventListener('click', swapViews);
+    $('hudBtn').addEventListener('click', toggleHud);
+    $('cineBtn').addEventListener('click', () => (state.cine ? stopCine() : startCine()));
+    $('pip').addEventListener('click', () => { if (!state.cine) swapViews(); });
+    new ResizeObserver(() => layoutViews()).observe($('sceneCard'));
     syncViewbar();
     document.querySelectorAll('#speeds button').forEach((b) => b.addEventListener('click', () => setSpeed(+b.dataset.speed)));
     $('runSelect').addEventListener('change', (ev) => { if (ev.target.value) loadFromParam(ev.target.value, true); });
@@ -785,6 +1010,10 @@
       else if (ev.key === 'c' || ev.key === 'C') setCam(cycle(CAMS, state.scene ? state.scene.camera : sceneOpts.cam));
       else if (ev.key === 'l' || ev.key === 'L') setTod(cycle(TODS, state.scene ? state.scene.timeOfDay : sceneOpts.tod));
       else if (ev.key === 'q' || ev.key === 'Q') setQuality((state.scene ? state.scene.quality : sceneOpts.q) === 'high' ? 'low' : 'high');
+      else if (ev.key === 'o' || ev.key === 'O') setPip(!pres.pip);
+      else if (ev.key === 'v' || ev.key === 'V') swapViews();
+      else if (ev.key === 'h' || ev.key === 'H') toggleHud();
+      else if (ev.key === 'k' || ev.key === 'K') { if (state.cine) stopCine(); else startCine(); }
     });
     new ResizeObserver(() => { drawCharts(); }).observe($('panel'));
     wireScrub();
@@ -800,8 +1029,10 @@
       await sceneReady;
       const t0 = parseFloat(params.get('t'));
       if (isNum(t0)) setTime(t0);
-      if (params.get('autoplay') === '1') togglePlay();
       if (params.get('rec') === '1') setRecMode(true);
+      if (root.PLVCine && root.PLVCine.cineParams(location.search).cine) startCine();
+      else if (params.get('autoplay') === '1') togglePlay();
+      layoutViews();
       document.documentElement.setAttribute('data-ready', '1');
     };
     state.last = performance.now();

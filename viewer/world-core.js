@@ -257,7 +257,10 @@
     const P = {
       day: { sunElev: 52, sunAz: 205, turbidity: 4, rayleigh: 1.2, mie: 0.004, mieG: 0.8, exposure: 0.42, sun: 3.2, sunColor: 0xfff4e5, hemi: 0.75, hemiSky: 0xbcd6ff, hemiGround: 0x8a8070, fog: 0xc7d6e4, fogDensity: 0.0016, windows: 0.0, lights: 0.7, bloom: 0.0, envIntensity: 0.9 },
       golden: { sunElev: 7, sunAz: 252, turbidity: 6, rayleigh: 2.2, mie: 0.006, mieG: 0.85, exposure: 0.42, sun: 3.0, sunColor: 0xffb070, hemi: 0.55, hemiSky: 0xa8bce0, hemiGround: 0x6a5040, fog: 0xd8b49a, fogDensity: 0.0018, windows: 0.35, lights: 1.2, bloom: 0.35, envIntensity: 0.8 },
-      dusk: { sunElev: 0.8, sunAz: 268, turbidity: 3.5, rayleigh: 2.6, mie: 0.005, mieG: 0.88, exposure: 0.62, sun: 0.35, sunColor: 0xff8a5a, hemi: 0.42, hemiSky: 0x40508a, hemiGround: 0x2a2430, fog: 0x404a6a, fogDensity: 0.0022, windows: 0.75, lights: 3.0, bloom: 0.55, envIntensity: 0.5 },
+      // Dusk uses a hand-tuned gradient sky (skyGrad) instead of the physical Sky shader:
+      // at a sun elevation near 0 the Sky shader turns a muddy brown under ACES.
+      dusk: { sunElev: 0.8, sunAz: 268, turbidity: 3.5, rayleigh: 2.6, mie: 0.005, mieG: 0.88, exposure: 0.66, sun: 0.35, sunColor: 0xff8a5a, hemi: 0.62, hemiSky: 0x4a5ea6, hemiGround: 0x2a2632, fog: 0x3a4272, fogDensity: 0.0022, windows: 0.75, lights: 3.0, bloom: 0.55, envIntensity: 0.65,
+        skyGrad: { zenith: 0x0a1636, mid: 0x203a80, horizon: 0x4e5690, glow: 0xff8a4c, glowHigh: 0xc7609a, ground: 0x1a1e34, glowPower: 4, glowWidth: 0.3 } },
     };
     const k = TIMES.includes(name) ? name : 'day';
     return Object.assign({ name: k }, P[k]);
@@ -270,7 +273,7 @@
   }
 
   /* ---------- cameras ---------- */
-  const CAMERAS = ['chase', 'orbit', 'top', 'city'];
+  const CAMERAS = ['chase', 'orbit', 'top', 'city', 'pad'];
   const easeInOut = (t) => { t = clamp(t, 0, 1); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; };
   const lerp = (a, b, f) => a + (b - a) * f;
   /** Blend two camera poses {px,py,pz,tx,ty,tz,fov}. */
@@ -298,6 +301,21 @@
   function topPose(drone, opt) {
     const h = Math.max(7, (drone ? Math.max(0, drone.y) : 0) + 5.5) * (opt.zoom || 1);
     return { px: 0, py: h, pz: h * 0.018, tx: 0, ty: 0, tz: 0, fov: 40 };
+  }
+  /**
+   * Low pad view: camera beyond the deck edge, 0.35 m above the deck, looking
+   * up at the drone and across the pad; it pulls back and widens as the drone
+   * climbs, so drone and pad stay in frame. Drifts slowly with clock.
+   */
+  function padPose(drone, clock, opt) {
+    const alt = Math.max(0, drone ? drone.y : 0);
+    // drifts toward the south-west, away from the stair tower on the south-east roof corner
+    const a = Math.min(alt, 8);
+    const az = (opt && isNum(opt.az) ? opt.az : 0.5) - 0.03 * (clock || 0);
+    const r = (2.7 + a * 0.6) * ((opt && opt.zoom) || 1);
+    const tx = (drone ? drone.x : 0) * 0.5, tz = (drone ? drone.z : 0) * 0.5;
+    const ty = Math.max(0.22, a * 0.43);
+    return { px: tx + r * Math.sin(az), py: 0.35, pz: tz + r * Math.cos(az), tx, ty, tz, fov: 44 + Math.min(1, a / 4) * 14 };
   }
   /** Wide establishing shot along the (obstacle-free) approach corridor; sways slowly with clock time (s). */
   function cityPose(clock, opt) {
@@ -334,7 +352,7 @@
   const api = {
     FACADES, TIMES, CAMERAS, rng, parseCity, streetLines, cityBlocks, buildingTiers, contextBuildings, sidewalkPoints,
     approachLimit, approachObstacles, windsockPose, timeOfDay, sunVector, easeInOut, lerpPose, orbitPose,
-    chasePose, topPose, cityPose, sceneParams, litPattern,
+    chasePose, topPose, cityPose, padPose, sceneParams, litPattern,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.PLVWorldCore = api;
