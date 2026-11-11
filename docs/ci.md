@@ -8,7 +8,7 @@ Each third-party action is pinned by full commit SHA.
 
 | Job | What it checks |
 |---|---|
-| `python` | Builds `plv`. Runs `tests/test_runner.py` with `unittest` on Python 3.12. The tests use the `plv` binary for the end-to-end case. |
+| `python` | Builds `plv`. Runs `tests/test_runner.py`, `tests/test_sitl_up.py` and `tests/test_export_tlog.py` with `unittest` on Python 3.12. The tests use the `plv` binary for the end-to-end case. |
 | `rust` | In `validator/`, with Rust 1.75.0 (the minimum supported version): `cargo fmt --check`, `cargo clippy` and `cargo test`. |
 | `viewer` | Runs `node --test viewer/tests/` on Node 24.11.0 (LTS). |
 | `hygiene` | Runs `.github/scripts/hygiene.sh`. It fails on the items in the next list. |
