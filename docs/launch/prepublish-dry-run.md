@@ -23,7 +23,7 @@ Read-only check of the checklist in `docs/milestones.md` against the repo at bra
 **2. Personal info: FAIL.** Findings:
 - F1. `docs/m1-container-setup.md` (7 lines: 17, 35, 46, 77, 89, 91, 110) contains the absolute home path including the OS username, plus a worktree path and a path to the private `local/m1/` evidence directory. History: the same file was added in commit `9977aa2`, so a plain edit still leaves it in history.
 - F2. Git author/committer email on 20 commits is Collin's personal email (the other 68 commits use the T3 Code noreply address). It would be public after a push. Options: rewrite with a GitHub noreply address, or accept it knowingly. Collin decides.
-- F3 (minor). The nickname `StarkPC` appears in `charter.md`, `decisions.md`, `milestones.md`, `t3-integration.md`. It is a machine nickname, not a hostname or IP; likely fine, flagged for review.
+- F3 (minor). The nickname a PC nickname (now removed) appears in `charter.md`, `decisions.md`, `milestones.md`, `t3-integration.md`. It is a machine nickname, not a hostname or IP; likely fine, flagged for review.
 - No hits for: email addresses in file contents, non-loopback IPs, `.local`/`.ts.net`/tailscale names, `/Users/` paths. `127.0.0.1` in the primer is loopback and fine.
 - Surname appears in `LICENSE`-adjacent `NOTICE` and `charter.md` ("Collin Craig"). The launch brief limits personal info to first name in the README only; NOTICE and charter are Collin's call. Flag for decision.
 - Commit messages: no paths or emails found outside `Co-Authored-By` trailers (21 trailers).

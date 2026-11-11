@@ -104,7 +104,7 @@ multi-aircraft vertiport sequencing, replayed real traffic data, learned percept
 | Risk | Mitigation |
 |---|---|
 | ArduPilot/Gazebo/plugin version mismatch | Pin in M0; container rebuildable. |
-| CPU camera rendering too slow | Lower resolution/rate; GPU diagnosis; StarkPC as optional fallback. |
+| CPU camera rendering too slow | Lower resolution/rate; GPU diagnosis; optional desktop PC as optional fallback. |
 | Laptop sleeps or overheats lid-shut | M0 proposal + acceptance tests 1–5; wall power only. |
 | Subscription limits hit | Pause and ask; no paid fallback. |
 | Learner stalls on a piece | Hint ladder, 30–60 min steps, re-scope at timebox. |

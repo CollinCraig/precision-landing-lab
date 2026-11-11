@@ -68,7 +68,7 @@ Non-goals (for now):
 ## Hard constraints
 
 - **Host:** Omarchy laptop is the primary, always-on machine. MacBook/iPad are
-  remote clients via T3 Connect. StarkPC is optional compute only.
+  remote clients via T3 Connect. optional desktop PC is optional compute only.
 - **Power:** heavy simulation runs lid-shut **only on wall power**; on battery
   only light work (code, tests, planning).
 - **Approvals required** before any install, system/network/security/credential/
