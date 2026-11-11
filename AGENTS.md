@@ -22,6 +22,11 @@ Owner-facing text includes chat replies, reports, briefs, primers, hints and dem
 - The README must include this line: "Procedures in this repository follow ASD-STE100 Simplified Technical English."
 - Do not put absolute home paths, usernames, hostnames or emails in tracked files.
 
+## Commit authorship (D-036)
+
+- Agents commit with an agent identity, never as the owner. Use `git -c user.name="Landing Lab Agent (<model>)" -c user.email="agent-<model>@noreply.invalid" commit ...`.
+- The owner's own commits use his identity and get no co-author line.
+
 ## Project rules
 
 - Read `docs/charter.md` and `docs/decisions.md` before you start work.
