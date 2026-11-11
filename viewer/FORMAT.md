@@ -17,7 +17,9 @@ runs/<run_id>/
 `manifest.json` and `result.json` are optional for the viewer (the header
 degrades to "NO RESULT"); `viewer.json` is required. `plv check` ignores
 `viewer.json` (unknown extra files are outside the M1 contract), and it is a
-derived artifact: regenerate it, never treat it as evidence.
+derived artifact: regenerate it, never treat it as evidence. The exporter
+never replaces a `result.json` that it did not write (`--viewer-only` writes
+only `viewer.json`).
 
 ## Producer
 
@@ -27,8 +29,12 @@ differences: it takes time zero from the first tlog record (there is no
 `manifest.json` for a manual SITL flight), it writes no `series.state` and no
 `states` (a tlog has no mission state), and it adds the optional columns
 `series.roll`, `series.pitch` and `series.yaw` (degrees, from ATTITUDE; the
-viewer ignores them). It also writes a derived `result.json` that has
-`"derived": true`, no verdict, and events for COMMAND_ACK, STATUSTEXT, mode
+viewer ignores them; a value is `null` before the first ATTITUDE record or
+when the record has a non-finite value). It adds `source.sysid` and
+`source.compid` (the vehicle that it used). The file is strict JSON. It also
+writes a derived `result.json` that has
+`"derived": true`, no verdict unless the operator passes `--verdict PASS|FAIL`
+(then `success` and `verdict` are set), and events for COMMAND_ACK, STATUSTEXT, mode
 changes and arm changes. Event kinds: `ack:<command>:<result>`,
 `statustext:<severity>: <text>`, `mode:<NAME>`, `armed`, `disarmed`.
 

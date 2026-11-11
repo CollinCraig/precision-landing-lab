@@ -14,6 +14,7 @@ The exporter uses only data that the tlog contains. It reads no simulator
 truth.
 
 Usage: python3 -m lab.export_tlog TLOG OUT_DIR [--run-id ID] [--t0 MODE]
+       [--verdict PASS|FAIL] [--viewer-only] [--sysid N] [--compid N]
 """
 import argparse
 import json
@@ -59,6 +60,12 @@ COMMANDS = {
 RESULTS = ["accepted", "temporarily_rejected", "denied", "unsupported", "failed", "in_progress", "cancelled"]
 
 MIN_PLAUSIBLE_TIMESTAMP_US = 10 ** 15  # year 2001; a tlog written by MAVProxy is later
+MAX_PLAUSIBLE_TIMESTAMP_US = 4 * 10 ** 15  # year 2096
+LARGE_GAP_US = 86400 * 10 ** 6  # a gap above one day is reported, never fatal
+# After a frame of unknown type (no CRC extra known) the next record must start
+# within this time window. Reason: the length byte of such a frame is unchecked.
+LOOKAHEAD_WINDOW_US = 3600 * 10 ** 6
+VERDICTS = {"PASS": True, "FAIL": False}
 
 
 class TlogError(Exception):
@@ -78,16 +85,19 @@ def crc16(data, extra):
 def _frame_at(buf, pos):
     """Parse one frame at buf[pos]. Return (msgid, sysid, compid, payload, end) or None.
 
-    None means: no valid frame here. Frames of unknown message type are
-    accepted by length only (no CRC extra is known), with msgid and payload
-    set to None for the payload.
+    None means: no valid frame here. A frame of a supported message type must
+    have a valid CRC and a valid payload length (MAVLink v1: the exact base
+    length; v2: 1 byte up to the full length, because the sender removes
+    trailing zero bytes). A frame of another type has no known CRC extra. It is
+    accepted by structure only, with payload None. `iter_records` checks that
+    the next record starts after it.
     """
     magic = buf[pos]
     if magic == 0xFE:
         if pos + 6 > len(buf):
             return None
         length, sysid, compid, msgid = buf[pos + 1], buf[pos + 3], buf[pos + 4], buf[pos + 5]
-        head, signed = 6, 0
+        head, signed, v1 = 6, 0, True
     elif magic == 0xFD:
         if pos + 10 > len(buf):
             return None
@@ -96,7 +106,7 @@ def _frame_at(buf, pos):
             return None
         sysid, compid = buf[pos + 5], buf[pos + 6]
         msgid = buf[pos + 7] | (buf[pos + 8] << 8) | (buf[pos + 9] << 16)
-        head, signed = 10, 13 if incompat & 0x01 else 0
+        head, signed, v1 = 10, 13 if incompat & 0x01 else 0, False
     else:
         return None
     end = pos + head + length + 2 + signed
@@ -104,7 +114,12 @@ def _frame_at(buf, pos):
         return None
     payload = buf[pos + head:pos + head + length]
     if msgid in KNOWN:
-        crc_extra = KNOWN[msgid][1]
+        _, crc_extra, base, ext = KNOWN[msgid]
+        base_len, full_len = struct.calcsize(base), struct.calcsize(base + ext)
+        if v1 and length != base_len:
+            return None
+        if not v1 and not 1 <= length <= full_len:
+            return None
         want = struct.unpack_from("<H", buf, pos + head + length)[0]
         if crc16(buf[pos + 1:pos + head + length], crc_extra) != want:
             return None
@@ -113,31 +128,49 @@ def _frame_at(buf, pos):
     return msgid, sysid, compid, payload, end
 
 
+def _next_record_follows(buf, end, ts):
+    """True if a plausible record starts at buf[end] (or the buffer ends there)."""
+    if end == len(buf):
+        return True
+    if end + 8 + 6 > len(buf):
+        return False
+    next_ts = struct.unpack_from(">Q", buf, end)[0]
+    if abs(next_ts - ts) > LOOKAHEAD_WINDOW_US:
+        return False
+    return _frame_at(buf, end + 8) is not None
+
+
 def iter_records(buf):
     """Yield (timestamp_us, msgid, sysid, compid, payload) and finally a stats dict.
 
     The generator yields tuples for records. Its last item is a dict with
-    `records` and `skipped_bytes`. A bad frame makes the reader scan forward
-    one byte at a time until a plausible timestamp and a valid frame follow.
+    `records`, `skipped_bytes` and `large_gaps`. A bad frame makes the reader
+    scan forward one byte at a time until a plausible timestamp and a valid
+    frame follow. A gap of more than one day between records is counted in
+    `large_gaps`; the reader continues after it.
     """
-    pos, size, records, skipped = 0, len(buf), 0, 0
+    pos, size, records, skipped, gaps = 0, len(buf), 0, 0, 0
     last_ts = 0
     while pos + 8 + 8 <= size:
         ts = struct.unpack_from(">Q", buf, pos)[0]
         frame = None
-        if ts >= MIN_PLAUSIBLE_TIMESTAMP_US and (not last_ts or abs(ts - last_ts) < 86400 * 10 ** 6):
+        if MIN_PLAUSIBLE_TIMESTAMP_US <= ts <= MAX_PLAUSIBLE_TIMESTAMP_US:
             frame = _frame_at(buf, pos + 8)
+            if frame is not None and frame[3] is None and not _next_record_follows(buf, frame[4], ts):
+                frame = None  # unverified length: it does not end at a record boundary
         if frame is None:
             pos += 1
             skipped += 1
             continue
         msgid, sysid, compid, payload, end = frame
-        last_ts = ts
+        if last_ts and ts - last_ts > LARGE_GAP_US:
+            gaps += 1
+        last_ts = max(last_ts, ts)
         records += 1
         pos = end
         yield ts, msgid, sysid, compid, payload
     skipped += max(0, size - pos)
-    yield {"records": records, "skipped_bytes": skipped}
+    yield {"records": records, "skipped_bytes": skipped, "large_gaps": gaps}
 
 
 def _decode(msgid, payload):
@@ -160,24 +193,30 @@ def mode_name(vehicle_type, custom_mode):
     return "MODE_%d" % custom_mode
 
 
-def parse_tlog(buf):
+def parse_tlog(buf, sysid=None, compid=None):
     """Decode a tlog into plain lists. Raise TlogError if it has no usable data.
 
-    The vehicle is the first system that sends a HEARTBEAT that is not from a
-    ground station and not from an invalid autopilot. Only messages from that
-    system are used. MAVProxy writes its own GCS heartbeat into the tlog; the
-    exporter skips it.
+    The vehicle is the first (system, component) that sends a HEARTBEAT that is
+    not from a ground station and not from an invalid autopilot. You can select
+    another vehicle with `sysid` and `compid`. Only messages from that system
+    and component are used. MAVProxy writes its own GCS heartbeat into the
+    tlog, and other components (gimbal, companion computer) send their own
+    position or attitude. The exporter skips them.
     """
     heartbeats, positions, attitudes, acks, texts = [], [], [], [], []
-    vehicle = None  # (sysid, compid) of the first vehicle heartbeat
+    vehicle = None
+    if sysid is not None or compid is not None:
+        if sysid is None or compid is None:
+            raise TlogError("give both sysid and compid, or neither")
+        vehicle = (sysid, compid)
     first_ts = last_ts = None
-    stats = {"records": 0, "skipped_bytes": 0, "time_backwards": 0}
+    stats = {"records": 0, "skipped_bytes": 0, "large_gaps": 0, "time_backwards": 0, "nonfinite_attitudes": 0}
     running_max = 0
     for item in iter_records(buf):
         if isinstance(item, dict):
             stats.update(item)
             break
-        ts, msgid, sysid, compid, payload = item
+        ts, msgid, src_sys, src_comp, payload = item
         if ts < running_max:
             stats["time_backwards"] += 1
             ts = running_max
@@ -187,36 +226,42 @@ def parse_tlog(buf):
         last_ts = ts
         if payload is None:
             continue
+        src = (src_sys, src_comp)
         if msgid == 0:
             custom_mode, vtype, autopilot, base_mode, _status, _ver = _decode(0, payload)
             if vehicle is None and vtype != MAV_TYPE_GCS and autopilot != MAV_AUTOPILOT_INVALID:
-                vehicle = (sysid, compid)
-            heartbeats.append((ts, sysid, compid, vtype, custom_mode, 1 if base_mode & BASE_MODE_ARMED else 0))
+                vehicle = src
+            heartbeats.append((ts, src, vtype, custom_mode, 1 if base_mode & BASE_MODE_ARMED else 0))
         elif msgid == 33:
             _t, lat, lon, _alt, rel, _vx, _vy, vz, hdg = _decode(33, payload)
-            positions.append((ts, sysid, lat, lon, rel, vz, hdg))
+            positions.append((ts, src, lat, lon, rel, vz, hdg))
         elif msgid == 30:
             _t, roll, pitch, yaw, *_rates = _decode(30, payload)
-            attitudes.append((ts, sysid, roll, pitch, yaw))
+            if not all(math.isfinite(v) for v in (roll, pitch, yaw)):
+                stats["nonfinite_attitudes"] += 1
+                roll = pitch = yaw = None  # unknown; JSON has no NaN
+            attitudes.append((ts, src, roll, pitch, yaw))
         elif msgid == 77:
             command, result = _decode(77, payload)[:2]
-            acks.append((ts, sysid, command, result))
+            acks.append((ts, src, command, result))
         elif msgid == 253:
             severity, raw = _decode(253, payload)[:2]
             text = raw.split(b"\0", 1)[0].decode("utf-8", errors="replace")
-            texts.append((ts, sysid, severity, text))
+            texts.append((ts, src, severity, text))
     if first_ts is None:
         raise TlogError("no valid MAVLink records in the tlog")
     if vehicle is None:
         raise TlogError("no vehicle HEARTBEAT in the tlog")
-    sysid = vehicle[0]
+    own = [h for h in heartbeats if h[1] == vehicle]
+    if not own:
+        raise TlogError("no HEARTBEAT from sysid %d compid %d in the tlog" % vehicle)
     return {
-        "first_ts": first_ts, "last_ts": last_ts, "stats": stats,
-        "heartbeats": [(h[0],) + h[3:] for h in heartbeats if h[1:3] == vehicle],
-        "positions": [(p[0],) + p[2:] for p in positions if p[1] == sysid],
-        "attitudes": [(a[0],) + a[2:] for a in attitudes if a[1] == sysid],
-        "acks": [(a[0],) + a[2:] for a in acks if a[1] == sysid],
-        "texts": [(t[0],) + t[2:] for t in texts if t[1] == sysid],
+        "first_ts": first_ts, "last_ts": last_ts, "stats": stats, "vehicle": vehicle,
+        "heartbeats": [(h[0],) + h[2:] for h in own],
+        "positions": [(p[0],) + p[2:] for p in positions if p[1] == vehicle],
+        "attitudes": [(a[0],) + a[2:] for a in attitudes if a[1] == vehicle],
+        "acks": [(a[0],) + a[2:] for a in acks if a[1] == vehicle],
+        "texts": [(t[0],) + t[2:] for t in texts if t[1] == vehicle],
     }
 
 
@@ -225,10 +270,18 @@ def _clean(value, digits):
     return 0.0 if value == 0 else value  # no negative zero
 
 
-def build_replay(data, run_id="tlog-export", t0="first-record"):
-    """Return (viewer_json, result_json) dictionaries from parse_tlog output."""
+def build_replay(data, run_id="tlog-export", t0="first-record", verdict=None):
+    """Return (viewer_json, result_json, notes) from parse_tlog output.
+
+    `verdict` is None, "PASS" or "FAIL". The tlog has no verdict, so the
+    operator supplies it. The result then has `success` for the viewer.
+    """
     if t0 not in ("first-record", "first-position"):
         raise TlogError("t0 must be first-record or first-position")
+    if verdict is not None:
+        verdict = str(verdict).upper()
+        if verdict not in VERDICTS:
+            raise TlogError("verdict must be one of: %s" % ", ".join(VERDICTS))
     positions, heartbeats = data["positions"], data["heartbeats"]
     t0_us = data["first_ts"]
     if t0 == "first-position":
@@ -279,10 +332,15 @@ def build_replay(data, run_id="tlog-export", t0="first-record"):
             att = data["attitudes"]
             while att_i + 1 < len(att) and att[att_i + 1][0] <= ts:
                 att_i += 1
-            _, roll, pitch, yaw = att[max(att_i, 0)]  # before the first ATTITUDE: the first one
-            series["roll"].append(_clean(math.degrees(roll), 2))
-            series["pitch"].append(_clean(math.degrees(pitch), 2))
-            series["yaw"].append(_clean(math.degrees(yaw) % 360.0, 2))
+            if att_i < 0 or att[att_i][1] is None:
+                roll = pitch = yaw = None  # no attitude yet (never a later one), or not finite
+            else:
+                _, roll, pitch, yaw = att[att_i]
+                roll, pitch = _clean(math.degrees(roll), 2), _clean(math.degrees(pitch), 2)
+                yaw = _clean(math.degrees(yaw) % 360.0, 2)
+            series["roll"].append(roll)
+            series["pitch"].append(pitch)
+            series["yaw"].append(yaw)
     if not modes:
         modes = ["UNKNOWN"]  # the viewer needs a modes table; an empty series is valid
 
@@ -321,6 +379,7 @@ def build_replay(data, run_id="tlog-export", t0="first-record"):
         "source": {
             "kind": "tlog", "generator": GENERATOR, "t0": t0,
             "t0_unix_us": t0_us, "tlog_records": stats["records"],
+            "sysid": data["vehicle"][0], "compid": data["vehicle"][1],
         },
         "frame": {"name": "NED", "origin": "home", "units": "m"},
         "pad": {"n": 0.0, "e": 0.0},
@@ -336,28 +395,79 @@ def build_replay(data, run_id="tlog-export", t0="first-record"):
         "tlog_records": stats["records"],
         "events": [{"t_us": t, "kind": k, "source": "autopilot"} for t, k in events],
     }
+    if verdict is not None:
+        result["success"] = VERDICTS[verdict]
+        result["verdict"] = verdict
+        result["verdict_source"] = "operator (--verdict)"
+        result["note"] = (
+            "Events derived from the tlog by %s. The verdict %s comes from the operator, not from the tlog."
+            % (GENERATOR, verdict)
+        )
     notes.update(
         dropped_events_before_t0=dropped, skipped_bytes=stats["skipped_bytes"],
-        time_backwards=stats["time_backwards"],
+        time_backwards=stats["time_backwards"], large_gaps=stats["large_gaps"],
+        nonfinite_attitudes=stats["nonfinite_attitudes"],
+        vehicle="sysid %d compid %d" % data["vehicle"],
     )
     return viewer, result, notes
 
 
-def export(tlog_path, out_dir, run_id=None, t0="first-record"):
-    """Write viewer.json and result.json into out_dir. Return a summary dict."""
+def _dump(doc):
+    """Strict JSON: NaN and Infinity raise ValueError."""
+    return json.dumps(doc, indent=1, allow_nan=False) + "\n"
+
+
+def _check_result_slot(path):
+    """Refuse to replace a result.json that is not a derived export.
+
+    A run directory holds its own result.json (verdict and metrics). The
+    exporter never replaces it. It replaces only a file that it wrote before
+    (`"derived": true`).
+    """
+    if not (path.exists() or path.is_symlink()):
+        return
+    try:
+        old = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        old = None
+    if not (isinstance(old, dict) and old.get("derived") is True):
+        raise TlogError(
+            "%s already exists and is not a derived export; it may hold run evidence. "
+            "Export into another directory, or use --viewer-only to write only viewer.json" % path
+        )
+
+
+def export(tlog_path, out_dir, run_id=None, t0="first-record", verdict=None, viewer_only=False,
+           sysid=None, compid=None):
+    """Write viewer.json and result.json into out_dir. Return a summary dict.
+
+    An existing result.json that the exporter did not write is never replaced
+    (TlogError). With `viewer_only` the exporter writes only viewer.json.
+    """
     tlog_path, out_dir = Path(tlog_path), Path(out_dir)
+    if viewer_only and verdict is not None:
+        raise TlogError("--verdict needs result.json; it cannot be used with --viewer-only")
     try:
         buf = tlog_path.read_bytes()
     except OSError as exc:
         raise TlogError("cannot read tlog: %s" % exc.strerror) from exc
-    viewer, result, notes = build_replay(parse_tlog(buf), run_id or tlog_path.parent.name or "tlog-export", t0)
+    data = parse_tlog(buf, sysid, compid)
+    viewer, result, notes = build_replay(data, run_id or tlog_path.parent.name or "tlog-export", t0, verdict)
+    try:
+        texts = [("viewer.json", _dump(viewer))]
+        if not viewer_only:
+            _check_result_slot(out_dir / "result.json")
+            texts.append(("result.json", _dump(result)))
+    except ValueError as exc:  # non-finite number: never write invalid JSON
+        raise TlogError("output has a value that JSON cannot hold: %s" % exc) from exc
     out_dir.mkdir(parents=True, exist_ok=True)
-    for name, doc in (("viewer.json", viewer), ("result.json", result)):
-        (out_dir / name).write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8")
+    for name, text in texts:
+        (out_dir / name).write_text(text, encoding="utf-8")
     return {
         "samples": len(viewer["series"]["t"]), "events": len(result["events"]),
         "tlog_records": result["tlog_records"], "duration_s": result["duration_us"] / 1e6,
-        "modes": viewer["modes"], **notes,
+        "modes": viewer["modes"], "verdict": result.get("verdict", "none"),
+        "result_written": not viewer_only, **notes,
     }
 
 
@@ -370,14 +480,32 @@ def main(argv=None):
         "--t0", choices=("first-record", "first-position"), default="first-record",
         help="time zero: first tlog record (default) or first GLOBAL_POSITION_INT (drops earlier events)",
     )
+    parser.add_argument(
+        "--verdict", type=str.upper, choices=sorted(VERDICTS),
+        help="verdict for the viewer (the tlog has none; you supply it). Default: no verdict",
+    )
+    parser.add_argument(
+        "--viewer-only", action="store_true",
+        help="write only viewer.json; keep an existing result.json (run evidence) untouched",
+    )
+    parser.add_argument("--sysid", type=int, help="vehicle system id (default: first vehicle HEARTBEAT)")
+    parser.add_argument("--compid", type=int, help="vehicle component id (needs --sysid)")
     args = parser.parse_args(argv)
     try:
-        summary = export(args.tlog, args.out_dir, args.run_id, args.t0)
+        summary = export(args.tlog, args.out_dir, args.run_id, args.t0, args.verdict, args.viewer_only,
+                         args.sysid, args.compid)
     except TlogError as exc:
         print("export_tlog: %s" % exc, file=sys.stderr)
         return 1
     for key, value in summary.items():
         print("%s: %s" % (key, value))
+    for key, text in (
+        ("skipped_bytes", "bad or corrupt data was skipped"),
+        ("large_gaps", "a gap of more than one day between records"),
+        ("nonfinite_attitudes", "ATTITUDE records with NaN or Infinity became null"),
+    ):
+        if summary[key]:
+            print("export_tlog: warning: %s (%s: %s)" % (text, key, summary[key]), file=sys.stderr)
     return 0
 
 

@@ -42,12 +42,23 @@ def heartbeat(custom_mode, armed, vtype=2, autopilot=3, sysid=1, compid=1):
     return frame_v2(0, struct.pack("<IBBBBB", custom_mode, vtype, autopilot, base, 4, 3), sysid, compid)
 
 
-def position(lat, lon, rel_mm, vz_cms, hdg_cdeg):
-    return frame_v2(33, struct.pack("<IiiiihhhH", 0, lat, lon, 0, rel_mm, 0, 0, vz_cms, hdg_cdeg))
+def position(lat, lon, rel_mm, vz_cms, hdg_cdeg, sysid=1, compid=1):
+    payload = struct.pack("<IiiiihhhH", 0, lat, lon, 0, rel_mm, 0, 0, vz_cms, hdg_cdeg)
+    return frame_v2(33, payload, sysid, compid)
 
 
-def attitude(roll, pitch, yaw):
-    return frame_v2(30, struct.pack("<Iffffff", 0, roll, pitch, yaw, 0, 0, 0))
+def attitude(roll, pitch, yaw, sysid=1, compid=1):
+    return frame_v2(30, struct.pack("<Iffffff", 0, roll, pitch, yaw, 0, 0, 0), sysid, compid)
+
+
+def unknown_frame(msgid=1, payload=bytes(31), length=None):
+    """A frame of a message type that the exporter does not decode (SYS_STATUS).
+
+    `length` overrides the length byte (a corrupt frame). The CRC bytes are
+    arbitrary: the exporter has no CRC extra for this type.
+    """
+    body = bytes([len(payload) if length is None else length, 0, 0, 0, 1, 1]) + msgid.to_bytes(3, "little") + payload
+    return b"\xfd" + body + b"\x12\x34"
 
 
 def statustext(severity, text):
@@ -216,6 +227,190 @@ class ExportTests(unittest.TestCase):
         export(self.tlog, self.dir / "b")
         for name in ("viewer.json", "result.json"):
             self.assertEqual((self.dir / "a" / name).read_bytes(), (self.dir / "b" / name).read_bytes())
+
+    # ---- Fix round: regression tests for the Codex review findings ----
+
+    def test_existing_result_is_never_overwritten(self):  # finding 1
+        out = self.dir / "run"
+        out.mkdir()
+        evidence = json.dumps({"schema_version": 1, "success": True, "metrics": {"err_m": 0.2}})
+        (out / "result.json").write_text(evidence)
+        with self.assertRaises(TlogError) as ctx:
+            export(self.tlog, out, verdict="FAIL")
+        self.assertIn("run evidence", str(ctx.exception))
+        self.assertEqual((out / "result.json").read_text(), evidence)
+        self.assertFalse((out / "viewer.json").exists())  # nothing is written on refusal
+        self.assertEqual(main([str(self.tlog), str(out)]), 1)
+        self.assertEqual((out / "result.json").read_text(), evidence)
+
+    def test_viewer_only_keeps_existing_result(self):  # finding 1
+        out = self.dir / "run"
+        out.mkdir()
+        evidence = json.dumps({"success": True, "metrics": {"err_m": 0.2}})
+        (out / "result.json").write_text(evidence)
+        summary = export(self.tlog, out, viewer_only=True)
+        self.assertEqual((out / "result.json").read_text(), evidence)
+        self.assertTrue((out / "viewer.json").exists())
+        self.assertFalse(summary["result_written"])
+        with self.assertRaises(TlogError):
+            export(self.tlog, out, viewer_only=True, verdict="PASS")
+
+    def test_unreadable_existing_result_is_not_overwritten(self):  # finding 1
+        out = self.dir / "run"
+        out.mkdir()
+        (out / "result.json").write_text("{not json")
+        with self.assertRaises(TlogError):
+            export(self.tlog, out)
+        self.assertEqual((out / "result.json").read_text(), "{not json")
+
+    def test_derived_result_is_replaced_on_reexport(self):  # finding 1
+        export(self.tlog, self.dir / "run")
+        export(self.tlog, self.dir / "run", verdict="PASS")
+        result = json.loads((self.dir / "run" / "result.json").read_text())
+        self.assertIs(result["success"], True)
+
+    def test_verdict_option(self):  # verdict flag
+        for verdict, success in (("PASS", True), ("fail", False)):
+            _, result = self.export(verdict=verdict)
+            self.assertIs(result["success"], success)
+            self.assertEqual(result["verdict"], verdict.upper())
+            self.assertTrue(result["derived"])
+        _, result = self.export()
+        self.assertNotIn("success", result)
+        with self.assertRaises(TlogError):
+            export(self.tlog, self.dir / "x", verdict="MAYBE")
+        self.assertEqual(main([str(self.tlog), str(self.dir / "cli"), "--verdict", "pass"]), 0)
+        self.assertIs(json.loads((self.dir / "cli" / "result.json").read_text())["success"], True)
+        with self.assertRaises(SystemExit):
+            main([str(self.tlog), str(self.dir / "cli2"), "--verdict", "MAYBE"])
+
+    def test_corrupt_length_of_unknown_message_is_detected(self):  # finding 2
+        # The damaged length covers the next position record and part of the one after.
+        pos_a = record(5_000_000, position(LAT, LON, 5000_0, 0, 0))
+        pos_b = record(6_000_000, position(LAT, LON, 7000, 0, 0))
+        damaged = record(4_900_000, unknown_frame(payload=bytes(31), length=31 + len(pos_a) + 8))
+        data = sample_tlog() + damaged + pos_a + pos_b + record(7_000_000, position(LAT, LON, 1000, 0, 0))
+        parsed = parse_tlog(data)
+        self.assertEqual([p[3] for p in parsed["positions"]][-3:], [50000, 7000, 1000])
+        self.assertGreater(parsed["stats"]["skipped_bytes"], 0)
+
+    def test_intact_unknown_messages_are_kept_without_skips(self):  # finding 2
+        data = (
+            sample_tlog() + record(4_600_000, unknown_frame()) + record(4_700_000, unknown_frame(msgid=1, payload=bytes(5)))
+            + record(5_000_000, position(LAT, LON, 1000, 0, 0))
+        )
+        parsed = parse_tlog(data)
+        self.assertEqual(parsed["stats"]["skipped_bytes"], 0)
+        self.assertEqual(parsed["stats"]["records"], 16 + 3)
+
+    def test_nonfinite_attitude_gives_strict_json(self):  # finding 3
+        data = record(0, heartbeat(0, 0)) + record(100_000, attitude(float("nan"), 0.0, 0.0)) + \
+            record(200_000, position(LAT, LON, 0, 0, 0)) + record(300_000, attitude(0.1, float("inf"), 0.0)) + \
+            record(400_000, position(LAT, LON, 0, 0, 0))
+        self.tlog.write_bytes(data)
+        viewer, _ = self.export()
+        text = (self.dir / "out" / "viewer.json").read_text()
+        for token in ("NaN", "Infinity"):
+            self.assertNotIn(token, text)
+        self.assertEqual(viewer["series"]["roll"], [None, None])
+        self.assertEqual(viewer["series"]["pitch"], [None, None])
+        self.assertEqual(parse_tlog(data)["stats"]["nonfinite_attitudes"], 2)
+
+    def test_non_finite_value_in_output_is_refused(self):  # finding 3 (second guard)
+        from lab import export_tlog
+        with self.assertRaises(ValueError):
+            export_tlog._dump({"x": float("nan")})
+
+    @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    def test_viewer_parser_accepts_nonfinite_attitude_output(self):  # finding 3
+        data = record(0, heartbeat(0, 0)) + record(100_000, attitude(float("nan"), 0.0, 0.0)) + \
+            record(200_000, position(LAT, LON, 0, 0, 0))
+        self.tlog.write_bytes(data)
+        export(self.tlog, self.dir / "replay")
+        script = (
+            "const P=require(process.argv[1]+'/viewer/app.js');const fs=require('fs');"
+            "const raw=JSON.parse(fs.readFileSync(process.argv[2]+'/viewer.json'));"
+            "console.log(P.parseViewer(raw).length);"
+        )
+        done = subprocess.run(
+            ["node", "-e", script, str(ROOT), str(self.dir / "replay")], capture_output=True, text=True, timeout=60,
+        )
+        self.assertEqual(done.stdout.strip(), "1", done.stderr)
+
+    def test_other_components_do_not_enter_the_replay(self):  # finding 4
+        data = b"".join([
+            record(0, heartbeat(0, 0)),                                          # autopilot 1/1
+            record(10_000, heartbeat(0, 0, vtype=18, autopilot=8, compid=191)),  # companion: invalid autopilot
+            record(100_000, position(LAT, LON, 3000, 0, 0)),
+            record(150_000, position(LAT, LON, 99000, 0, 0, compid=100)),
+            record(160_000, attitude(1.0, 0.0, 0.0, compid=100)),
+            record(170_000, frame_v2(77, struct.pack("<HBBiBB", 400, 0, 0, 0, 255, 230), compid=100)),
+            record(180_000, frame_v2(253, struct.pack("<B50s", 6, b"camera text") + bytes(3), compid=100)),
+            record(200_000, position(LAT, LON, 4000, 0, 0)),
+        ])
+        parsed = parse_tlog(data)
+        self.assertEqual([p[3] for p in parsed["positions"]], [3000, 4000])
+        self.assertEqual(parsed["attitudes"], [])
+        self.assertEqual((parsed["acks"], parsed["texts"]), ([], []))
+        self.assertEqual(parsed["vehicle"], (1, 1))
+
+    def test_vehicle_component_is_configurable(self):  # finding 4
+        data = b"".join([
+            record(0, heartbeat(0, 0)),
+            record(10_000, heartbeat(4, 0, compid=2)),
+            record(100_000, position(LAT, LON, 3000, 0, 0)),
+            record(200_000, position(LAT, LON, 4000, 0, 0, compid=2)),
+        ])
+        parsed = parse_tlog(data, sysid=1, compid=2)
+        self.assertEqual([p[3] for p in parsed["positions"]], [4000])
+        self.assertEqual(parsed["vehicle"], (1, 2))
+        with self.assertRaises(TlogError):
+            parse_tlog(data, sysid=1, compid=9)
+        with self.assertRaises(TlogError):
+            parse_tlog(data, sysid=1)
+
+    def test_attitude_has_no_look_ahead(self):  # finding 5
+        data = b"".join([
+            record(0, heartbeat(0, 0)),
+            record(1_000_000, position(LAT, LON, 0, 0, 0)),
+            record(2_000_000, attitude(1.0, 0.0, 0.0)),
+            record(3_000_000, position(LAT, LON, 0, 0, 0)),
+        ])
+        self.tlog.write_bytes(data)
+        viewer, _ = self.export()
+        self.assertEqual(viewer["series"]["roll"], [None, 57.3])
+        self.assertEqual(viewer["series"]["yaw"], [None, 0.0])
+
+    def test_one_day_gap_does_not_stop_the_reader(self):  # finding 6
+        day = 86_400_000_000
+        for gap in (day, day + 1, 30 * day):
+            data = record(0, heartbeat(0, 0)) + record(gap, position(LAT, LON, 1000, 0, 0)) + \
+                record(gap + 1_000_000, position(LAT, LON, 2000, 0, 0))
+            parsed = parse_tlog(data)
+            self.assertEqual([p[3] for p in parsed["positions"]], [1000, 2000])
+            self.assertEqual(parsed["stats"]["skipped_bytes"], 0)
+        self.assertEqual(parsed["stats"]["large_gaps"], 1)
+        self.tlog.write_bytes(data)
+        self.assertEqual(main([str(self.tlog), str(self.dir / "o")]), 0)
+
+    def test_short_v1_payload_is_rejected(self):  # finding 7
+        good = struct.pack("<IiiiihhhH", 0, LAT, LON, 0, 3000, 0, 0, 0, 100)
+        data = b"".join([
+            record(0, frame_v1(0, struct.pack("<IBBBBB", 0, 2, 3, 0x80, 4, 3))),
+            record(100, frame_v1(33, b"\0")),            # short: would give a false zero position
+            record(200, frame_v1(33, good[:-2])),         # short by 2 bytes
+            record(300, frame_v1(33, good + b"\0")),     # too long
+            record(400, frame_v1(33, good)),
+        ])
+        parsed = parse_tlog(data)
+        self.assertEqual([p[3] for p in parsed["positions"]], [3000])
+        self.assertGreater(parsed["stats"]["skipped_bytes"], 0)
+
+    def test_v2_payload_length_limits(self):  # finding 7
+        good = struct.pack("<IiiiihhhH", 0, LAT, LON, 0, 3000, 0, 0, 0, 100)
+        data = record(0, heartbeat(0, 0)) + record(100, frame_v2(33, good + b"\1", truncate=False)) + \
+            record(200, frame_v2(33, good, truncate=True))
+        self.assertEqual([p[3] for p in parse_tlog(data)["positions"]], [3000])
 
     @unittest.skipUnless(shutil.which("node"), "node is not installed")
     def test_viewer_parser_accepts_the_output(self):

@@ -6,7 +6,9 @@ The exporter uses only the Python standard library. It reads only data that the 
 ## What the exporter writes
 
 - `viewer.json`: position (NED from the first sample), altitude, climb rate, heading, attitude, flight mode and armed state. Format: `viewer/FORMAT.md`.
-- `result.json`: events from COMMAND_ACK, STATUSTEXT, mode changes and arm changes. It has `"derived": true` and no verdict. The viewer shows "NO RESULT".
+- `result.json`: events from COMMAND_ACK, STATUSTEXT, mode changes and arm changes. It has `"derived": true`. It has no verdict, unless you set `--verdict`. Without a verdict the viewer shows "NO RESULT".
+
+The exporter never replaces a `result.json` that it did not write. A run directory keeps its verdict and metrics in that file. If the file exists and has no `"derived": true`, the exporter stops with an error and writes nothing. Use another output directory, or use `--viewer-only`.
 
 ## Steps
 
@@ -30,12 +32,19 @@ Alternative without a server: open `viewer/index.html`, select "Load files…", 
 
 - `--t0 first-position`: time zero is the first position sample. The exporter drops earlier events and prints how many.
 - The default time zero is the first tlog record. The replay then starts with a still period before the first position sample.
+- `--verdict PASS` or `--verdict FAIL`: the tlog has no verdict, so you supply it. The exporter writes `success` and `verdict` in the derived `result.json`. The viewer then shows PASS or FAIL.
+- `--viewer-only`: write only `viewer.json`. An existing `result.json` stays unchanged. Use this option for a run directory that has its own `result.json`.
+- `--sysid N --compid N`: select the vehicle yourself. The default is the first vehicle HEARTBEAT.
 
 ## Limits
 
-- The exporter uses the first vehicle HEARTBEAT to find the vehicle. It skips the MAVProxy ground station heartbeat.
-- It decodes five message types: HEARTBEAT, GLOBAL_POSITION_INT, ATTITUDE, COMMAND_ACK and STATUSTEXT. It checks the CRC of each frame.
-- It skips bad frames and counts the skipped bytes. It does not join chunked STATUSTEXT messages.
+- The exporter uses the first vehicle HEARTBEAT to find the vehicle (system ID and component ID). It skips the MAVProxy ground station heartbeat.
+- It uses only messages from that system and component. Messages from other components (gimbal, companion computer) are ignored.
+- It decodes five message types: HEARTBEAT, GLOBAL_POSITION_INT, ATTITUDE, COMMAND_ACK and STATUSTEXT. It checks the CRC and the payload length of each frame. MAVLink v1 needs the exact length. MAVLink v2 can have trailing zero bytes removed.
+- A frame of another message type has no known CRC extra. The exporter accepts it only if the next record starts right after it (within one hour). Otherwise the exporter skips it as corrupt.
+- It skips bad frames and counts the skipped bytes. Check that `skipped_bytes` is 0. It does not join chunked STATUSTEXT messages.
+- A gap of more than one day between records is not an error. The exporter counts it in `large_gaps` and prints a warning.
+- Attitude columns use only the latest ATTITUDE record at or before each position sample. Before the first ATTITUDE record, the value is `null`. An ATTITUDE record with NaN or Infinity also gives `null`.
 - Mode names are ArduCopter names. Other vehicles show `MODE_<number>`.
 - A tlog has no mission state, so the viewer colours the run by flight mode.
 
