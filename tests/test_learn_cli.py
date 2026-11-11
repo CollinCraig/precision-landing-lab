@@ -118,14 +118,40 @@ class LearnCliTests(unittest.TestCase):
             link.symlink_to(learn_cli.PLATFORM_ROOT)
             candidates = (inside, inside / "deeper", link / "via-link", learn_cli.PLATFORM_ROOT,
                           learn_cli.PLATFORM_ROOT / "docs" / ".." / "elsewhere")
-            with patch.object(learn_cli, "git") as git_call, patch.object(learn_cli.shutil, "copytree") as copy:
+            with patch.object(learn_cli, "git", wraps=learn_cli.git) as git_call, \
+                    patch.object(learn_cli.shutil, "copytree") as copy:
                 for target in candidates:
                     code, out = learn("--pilot", str(target), "init")
                     self.assertEqual(code, 1, target)
                     self.assertIn("inside the platform repository", out)
-                self.assertFalse(git_call.called or copy.called)
+                self.assertFalse(copy.called)
+                self.assertFalse([c for c in git_call.call_args_list if c.args[0] in ("init", "add", "commit")])
         self.assertFalse(inside.exists())
         self.assertFalse((learn_cli.PLATFORM_ROOT / "elsewhere").exists())
+
+    def test_init_rejects_targets_below_every_checkout_and_the_common_git_directory(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root).resolve()
+            seed = root / "seed"
+            seed.mkdir()
+            git(seed, "init", "-q", "-b", "main")
+            git(seed, "-c", "user.name=t", "-c", "user.email=t" + "@noreply" + ".invalid", "commit", "-q",
+                "--allow-empty", "-m", "seed")
+            bare = root / "common.git"  # the common Git directory sits outside both checkouts
+            git(root, "clone", "-q", "--bare", str(seed), str(bare))
+            first, second = root / "checkout-a", root / "checkout-b"
+            git(bare, "worktree", "add", "-q", "--detach", str(first), "HEAD")
+            git(bare, "worktree", "add", "-q", "--detach", str(second), "HEAD")
+            targets = (second / "pilot", second / "deeper" / "pilot", bare / "pilot", bare / "worktrees" / "x")
+            with patch.object(learn_cli, "PLATFORM_ROOT", first), \
+                    patch.object(learn_cli.shutil, "copytree") as copy, \
+                    patch.object(Path, "mkdir") as mkdir:
+                for target in targets:
+                    code, out = learn("--pilot", str(target), "init")
+                    self.assertEqual(code, 1, target)
+                    self.assertIn("inside the platform repository", out)
+                self.assertFalse(copy.called or mkdir.called)
+                self.assertFalse(learn_cli.inside_platform(root / "outside" / "pilot"))  # outside every root
 
     def test_init_does_not_overwrite_a_folder_filled_during_the_copy(self):
         with tempfile.TemporaryDirectory() as root:

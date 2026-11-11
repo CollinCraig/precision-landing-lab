@@ -67,11 +67,28 @@ def platform_commit():
         return None, False
 
 
+def platform_roots():
+    """Return every folder that the platform repository owns (D-038).
+
+    These are all checkouts from `git worktree list` and the common Git directory.
+    Without Git, the list holds the active checkout only.
+    """
+    roots = {PLATFORM_ROOT.resolve()}
+    try:
+        for line in git("worktree", "list", "--porcelain", cwd=PLATFORM_ROOT).stdout.splitlines():
+            if line.startswith("worktree "):
+                roots.add(Path(line[len("worktree "):]).resolve())
+        common = Path(git("rev-parse", "--git-common-dir", cwd=PLATFORM_ROOT).stdout.strip())
+        roots.add((PLATFORM_ROOT / common).resolve())  # an absolute path stays absolute
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    return roots
+
+
 def inside_platform(dest):
-    """True when `dest` is the platform folder or a folder below it (D-038: two repositories)."""
-    root = PLATFORM_ROOT.resolve()
+    """True when `dest` is, or is below, any checkout or the common Git directory of the platform."""
     dest = dest.resolve()
-    return dest == root or root in dest.parents
+    return any(dest == root or root in dest.parents for root in platform_roots())
 
 
 def init(dest):

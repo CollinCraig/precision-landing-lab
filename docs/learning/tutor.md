@@ -53,6 +53,6 @@ His pieces: `mission.py` (M1), tag detection (M2), frame conversion and `TargetE
 ## After a session
 
 - The owner adds one row to `progress.md` in the pilot repository. The row has the date, the session, what he finished and his next action.
-- The tutor adds only the highest help level (0 to 3) in the column "Help level". The owner writes everything else.
+- The tutor proposes the highest help level (0 to 3) in chat. The owner writes it in the column "Help level". The tutor never edits `progress.md`.
 - All hint files are help level 2. The file number is not a help level.
 - The owner writes the number of the highest hint file that he opened (0 to 3) in the column "Hint file".

@@ -36,7 +36,7 @@ Your code must find out for itself when the autopilot is ready. See `hints/step-
 
 ## Idea 3: every wait has a time limit
 
-Telemetry can stop. A command can be refused. A state can never arrive.
+Telemetry can stop. The autopilot can refuse a command. A state can never arrive.
 If your code waits with no limit, it waits for ever.
 Give each wait its own time limit. The platform gives the limits in `budgets`.
 When a limit ends, report a failure. Name the state in the failure detail.

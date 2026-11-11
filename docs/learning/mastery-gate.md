@@ -26,7 +26,7 @@ Two transitions need more:
 |---|---|---|
 | 1. Explain-back | Fill in `notes/m1.md`: the state diagram and the transition table. No agent edits it. | You fill in all rows with your own words. The checker finds no row that only repeats the hints. |
 | 2. Predict, then run | The checker sets two faults in the fake. Before the run, you write which state fails and which failure code you report. | At least one of two predictions is exact. For the other, you explain the difference. |
-| 3. Transfer | One change with no tests and no hints: "hold 8 seconds at 5 m, then land with the other landing request". You write the change and one test for it. The fake autopilot accepts both landing requests. It records `reached_at` and `land_at`. It accepts a takeoff height of 5 m only, so keep 5 m. | The change works on the fake. Your test fails when you break the change. |
+| 3. Transfer | One change with no tests and no hints: "hold 8 seconds at 5 m, then land with the other landing request". You write the change and one test for it. The fake autopilot accepts both landing requests. It records `reached_at` and `land_at`. It accepts a takeoff height of 5 m only, so keep 5 m. | The change works on the fake. Your test fails for a 5 second hold. Your test also fails for the old landing request. |
 | 4. Cold recall | One week later you answer three questions without your code open. | Two of three answers are correct. |
 | 5. Help record | `progress.md` shows the columns "Hint file" (0 to 3) and "Help level" (0 to 3) for each step. All hint files are help level 2. | The record is complete. The level is information. It is not a grade. |
 

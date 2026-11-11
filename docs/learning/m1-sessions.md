@@ -4,7 +4,7 @@ Procedures in this repository follow ASD-STE100 Simplified Technical English.
 
 This plan replaces the study-first order for M1 (review A-09). You do before you read.
 Each session takes 30 to 60 minutes. Reading takes 20 minutes at most. Stop at the end of the session.
-After each session, write one row in `progress.md`. The row has the date, the session, what you finished, your next action and your hint file number. The tutor adds the help level. All hint files are help level 2.
+After each session, write one row in `progress.md`. The row has the date, the session, what you finished, your next action and your hint file number. The tutor proposes the help level in chat. You write it. All hint files are help level 2.
 
 | # | Session | Read (max 20 min) | Do | Result you can see |
 |---|---|---|---|---|
