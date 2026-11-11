@@ -10,8 +10,9 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#f3f1eb; --panel:#fbfaf6; --panel-2:#f1eee6; --ink:#1a1e23; --ink-2:#4b535c; --ink-3:#6f7780; --rule:#d8d4ca;
-  --accent:#2a5bd7; --ok:#1f8c48; --warn:#a86a00; --bad:#c2352a; --cyan:#0a849f; --tdpc:#e0ad12;
+  /* Lab core tokens. The same values are in viewer/ and design/ (viewer/tests/tokens.test.js checks this). */
+  --bg:#f3f1eb; --panel:#fbfaf6; --panel-2:#f1eee6; --ink:#1a1e23; --ink-2:#4b535c; --ink-3:#626a73; --rule:#d8d4ca;
+  --accent:#2a5bd7; --ok:#1a7a3e; --warn:#946000; --bad:#c2352a; --cyan:#06788f; --tdpc:#e0ad12;
   --ax-x:#cf3a2c; --ax-y:#1f8c48; --ax-z:#2a5bd7; --ground:#d9d5cb; --ground-line:#c3beb2; --deck:#43484f;
   --shadow:0 1px 0 rgba(0,0,0,.03),0 8px 28px -12px rgba(30,30,20,.18);
   --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -19,14 +20,14 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#808a94; --rule:#26303a;
-  --accent:#7d9dff; --ok:#46c779; --warn:#e3a33a; --bad:#ff6b5e; --cyan:#3cc2e0; --tdpc:#f0c02e;
+  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#8a949e; --rule:#26303a;
+  --accent:#7d9dff; --ok:#46c779; --warn:#e3a33a; --bad:#ff6b5e; --cyan:#3fd0ee; --tdpc:#f0c02e;
   --ax-x:#ff6b5e; --ax-y:#46c779; --ax-z:#7d9dff; --ground:#1c2228; --ground-line:#2b343d; --deck:#2c3238;
   --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
 }}
 :root[data-theme="dark"]{
-  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#808a94; --rule:#26303a;
-  --accent:#7d9dff; --ok:#46c779; --warn:#e3a33a; --bad:#ff6b5e; --cyan:#3cc2e0; --tdpc:#f0c02e;
+  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#8a949e; --rule:#26303a;
+  --accent:#7d9dff; --ok:#46c779; --warn:#e3a33a; --bad:#ff6b5e; --cyan:#3fd0ee; --tdpc:#f0c02e;
   --ax-x:#ff6b5e; --ax-y:#46c779; --ax-z:#7d9dff; --ground:#1c2228; --ground-line:#2b343d; --deck:#2c3238;
   --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
 }
@@ -39,7 +40,11 @@ header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:1
 .eyebrow a{color:inherit}
 h1{font-size:clamp(26px,4vw,38px);line-height:1.1;margin:10px 0 8px;letter-spacing:-.015em;font-weight:700}
 .lede{color:var(--ink-2);max-width:64ch;margin:0}
-.toggle{flex:none;font:500 13px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:999px;padding:9px 14px;cursor:pointer;min-height:40px}
+.hdr-tools{flex:none;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.toggle{flex:none;display:inline-flex;align-items:center;gap:7px;font:500 13px var(--mono);line-height:1.2;color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:999px;padding:9px 14px;cursor:pointer;min-height:40px;text-decoration:none;white-space:nowrap;transition:border-color .15s}
+.toggle:hover{border-color:var(--ink-3)}
+.toggle svg{width:14px;height:14px;flex:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin:14px 0 0;font:13px var(--mono);color:var(--ink-3)}
 .meta b{color:var(--ink-2);font-weight:500}
 section{margin-top:44px}
@@ -70,7 +75,7 @@ table.t th{font:600 12px var(--mono);letter-spacing:.06em;text-transform:upperca
 table.t td{color:var(--ink-2)}
 table.t td:first-child{color:var(--ink)}
 .scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.btn,.chip{font:500 13px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:9px;padding:9px 13px;cursor:pointer;min-height:42px;touch-action:manipulation}
+.btn,.chip{font:500 13px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:9px;padding:9px 13px;cursor:pointer;min-height:44px;touch-action:manipulation;transition:border-color .15s,background-color .15s,color .15s}
 .btn:hover,.chip:hover{border-color:var(--ink-3)}
 .btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -97,7 +102,8 @@ footer ul{padding-left:18px;margin:6px 0 12px}
 .tm{font-family:var(--mono);fill:var(--ink-2)}
 @media (max-width:900px){.grid,.grid.even{grid-template-columns:1fr}}
 @media (max-width:560px){header.top{flex-direction:column;align-items:flex-start}}
-@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (pointer:coarse){.toggle{min-height:44px}input[type=range]{height:44px}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}a.lesson:hover{transform:none}}
 .pipe svg text{font-family:var(--mono)}
 #spread{touch-action:manipulation;border-radius:10px;background:var(--panel-2)}
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:14px}
@@ -119,8 +125,12 @@ footer ul{padding-left:18px;margin:6px 0 12px}
     <p class="lede">The camera finds the tag. Your code turns the detection into a target estimate. A <code>LANDING_TARGET</code> message carries the estimate to ArduPilot. ArduPilot steers the descent. This page explains each step at concept level.</p>
     <div class="meta"><span><b>Time</b> ~25 min</span><span><b>Prepares</b> estimate.py and safety.py (M3)</span><span><b>Numbers</b> all illustrative unless a source is given</span></div>
   </div>
-  <button class="toggle" id="themeBtn" type="button" aria-label="Change between light and dark theme">◐ theme</button>
+  <div class="hdr-tools">
+    <a class="toggle" href="../viewer/index.html?run=samples/sample-clean-hold">Replay viewer</a>
+    <button class="toggle" id="themeBtn" type="button" aria-label="Change between light and dark theme"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg>Theme</button>
+  </div>
 </header>
+<main>
 
 <!-- A -->
 <section id="pipe">
@@ -309,6 +319,8 @@ footer ul{padding-left:18px;margin:6px 0 12px}
   <p class="no-sol">This page explains concepts only. It contains no AprilTag pose code, no frame conversion code and no abort or go-around logic. The toy model in section E is a JavaScript sketch for intuition. It is not a design for estimate.py or safety.py.</p>
 </section>
 
+</main>
+
 <footer>
   <b>Sources</b> (checked 2026-11-11)
   <ul>
@@ -322,7 +334,7 @@ footer ul{padding-left:18px;margin:6px 0 12px}
 </footer>
 </div>
 
-<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('pll-theme');if(s)r.setAttribute('data-theme',s);}catch(e){}b.addEventListener('click',function(){var c=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');var n=c==='dark'?'light':'dark';r.setAttribute('data-theme',n);try{localStorage.setItem('pll-theme',n);}catch(e){}document.dispatchEvent(new Event('themechange'));});})();</script>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn'),K='pll-theme';try{var s=localStorage.getItem(K);if(s==='light'||s==='dark')r.setAttribute('data-theme',s);}catch(e){}b.addEventListener('click',function(){var c=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');var n=c==='dark'?'light':'dark';r.setAttribute('data-theme',n);try{localStorage.setItem(K,n);}catch(e){}document.dispatchEvent(new Event('themechange'));});})();</script>
 <script>
 (function(){
   'use strict';

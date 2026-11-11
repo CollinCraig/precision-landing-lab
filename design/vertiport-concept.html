@@ -10,7 +10,8 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#f3f1eb; --panel:#fbfaf6; --ink:#1a1e23; --ink-2:#4b535c; --ink-3:#7b838c; --rule:#d8d4ca;
+  /* Lab core tokens. The same values are in viewer/ and learn/ (viewer/tests/tokens.test.js checks this). */
+  --bg:#f3f1eb; --panel:#fbfaf6; --panel-2:#f1eee6; --ink:#1a1e23; --ink-2:#4b535c; --ink-3:#626a73; --rule:#d8d4ca; --accent:#2a5bd7;
   --roof:#cfcbc2; --roof-line:#bdb8ad; --parapet:#9d988e; --deck:#43484f; --deck-sa:#585e66; --tlof:#6e7379;
   --mark:#f6f5f0; --tdpc:#f0c02e; --vblue:#2a5bd7; --lit:#2fd16b; --amber:#d98a00; --red:#cf3a2c; --cyan:#0a9fbf;
   --wedge:rgba(42,91,215,.10); --wedge-line:rgba(42,91,215,.55); --ofv:rgba(47,209,107,.10); --ofv-line:rgba(31,140,72,.7);
@@ -20,13 +21,13 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0d1115; --panel:#141a20; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#77818b; --rule:#26303a;
+  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#8a949e; --rule:#26303a; --accent:#7d9dff;
   --roof:#1c2228; --roof-line:#252d35; --parapet:#38424c; --deck:#2c3238; --deck-sa:#3a4148; --tlof:#535a61;
   --wedge:rgba(110,150,255,.10); --wedge-line:rgba(130,165,255,.6); --ofv:rgba(47,209,107,.10); --ofv-line:rgba(70,210,120,.7);
   --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
 }}
 :root[data-theme="dark"]{
-  --bg:#0d1115; --panel:#141a20; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#77818b; --rule:#26303a;
+  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#8a949e; --rule:#26303a; --accent:#7d9dff;
   --roof:#1c2228; --roof-line:#252d35; --parapet:#38424c; --deck:#2c3238; --deck-sa:#3a4148; --tlof:#535a61;
   --wedge:rgba(110,150,255,.10); --wedge-line:rgba(130,165,255,.6); --ofv:rgba(47,209,107,.10); --ofv-line:rgba(70,210,120,.7);
   --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
@@ -36,10 +37,14 @@ html{-webkit-text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--sans);}
 .wrap{max-width:1180px;margin:0 auto;padding:0 16px 64px}
 header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:36px 0 20px;border-bottom:1px solid var(--rule)}
-.eyebrow{font:500 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.eyebrow{font:500 12px/1.3 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.eyebrow a{color:inherit}
 h1{font-size:clamp(26px,4vw,40px);line-height:1.08;margin:10px 0 8px;letter-spacing:-.015em;font-weight:700}
 .lede{color:var(--ink-2);max-width:62ch;margin:0}
-.toggle{flex:none;font:500 13px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:999px;padding:8px 14px;cursor:pointer}
+.toggle{flex:none;display:inline-flex;align-items:center;gap:7px;font:500 13px var(--mono);line-height:1.2;color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:999px;padding:9px 14px;cursor:pointer;min-height:40px;transition:border-color .15s}
+.toggle svg{width:14px;height:14px;flex:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (pointer:coarse){.toggle,.hud-controls button{min-height:44px}}
 .toggle:hover{border-color:var(--ink-3)}
 .meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin:16px 0 0;font:13px var(--mono);color:var(--ink-3)}
 .meta b{color:var(--ink-2);font-weight:500}
@@ -98,13 +103,14 @@ footer a{color:var(--ink-2)}
 <div class="wrap">
 <header class="top">
   <div>
-    <div class="eyebrow">Precision Landing Lab · design concept · M2 world / M3 overlay</div>
+    <div class="eyebrow"><a id="hubLink" href="site-hub.html">Precision Landing Lab</a> · design concept · M2 world / M3 overlay</div>
     <h1>Rooftop vertiport, scaled to a 1&nbsp;m pad</h1>
     <p class="lede">A small rooftop vertiport laid out with FAA EB&nbsp;105 proportions and EASA marking conventions, sized for a small quadcopter. The AprilTag sits inside the touchdown ring, where a pilot's aim point would be.</p>
     <div class="meta"><span><b>Design D</b> 1.0 m</span><span><b>Ratios</b> TLOF 1D · FATO 2D · SA 3D</span><span><b>Deck</b> +0.9 m (elevated)</span><span><b>Source</b> docs/research/vertiport-design.md</span></div>
   </div>
-  <button class="toggle" id="themeBtn" type="button" aria-label="Toggle light or dark theme">◐ theme</button>
+  <button class="toggle" id="themeBtn" type="button" aria-label="Change between light and dark theme"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg>Theme</button>
 </header>
+<main>
 
 <!-- ============ A. TOP-DOWN ============ -->
 <section id="plan">
@@ -524,6 +530,8 @@ footer a{color:var(--ink-2)}
   </div>
 </section>
 
+</main>
+
 <footer>
   Drawings are original and based on public guidance: FAA Engineering Brief 105 (2022) and EB 105A (2024), FAA draft AC 150/5390-4 (2026) and EASA PTS-VPT-DSN (2022). Values not confirmed against primary text are marked UNVERIFIED in <code>docs/research/vertiport-design.md</code>. Simulation-only concept, not for real-world design.
 </footer>
@@ -532,13 +540,15 @@ footer a{color:var(--ink-2)}
 <script>
 (function(){
   // ---- theme toggle ----
-  var root=document.documentElement, btn=document.getElementById('themeBtn');
-  try{var saved=localStorage.getItem('vp-theme'); if(saved) root.setAttribute('data-theme',saved);}catch(e){}
+  var root=document.documentElement, btn=document.getElementById('themeBtn'), KEY='pll-theme'; // one key for all lab pages
+  try{var saved=localStorage.getItem(KEY)||localStorage.getItem('vp-theme'); if(saved==='light'||saved==='dark') root.setAttribute('data-theme',saved);}catch(e){}
   btn.addEventListener('click',function(){
     var cur=root.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
     var next=cur==='dark'?'light':'dark'; root.setAttribute('data-theme',next);
-    try{localStorage.setItem('vp-theme',next);}catch(e){}
+    try{localStorage.setItem(KEY,next);}catch(e){}
   });
+  // The hub link is correct only when this file is served from design/ next to site-hub.html.
+  if(!/\/design\/[^\/]*$/.test(location.pathname)){var hl=document.getElementById('hubLink'); if(hl){hl.removeAttribute('href');}}
 
   var NS='http://www.w3.org/2000/svg';
   function el(tag,attrs,parent){var n=document.createElementNS(NS,tag);for(var k in attrs)n.setAttribute(k,attrs[k]);if(parent)parent.appendChild(n);return n;}
