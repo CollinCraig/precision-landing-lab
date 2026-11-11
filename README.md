@@ -22,6 +22,8 @@ No landing-accuracy numbers are published until they come from pre-registered, h
 
 This repository is the **platform**. An AI agent team (Claude and Codex models) builds it, and Collin Craig directs and reviews it. Agent commits use an agent identity, for example `Landing Lab Agent (claude-sonnet-5-5)`. Each task and its review rounds are listed in `docs/evals/agent-team-log.md`.
 
+Note on older history: before 2026-11-11 (decision D-036), agent commits used Collin's name. Commits under his name before that date therefore include agent-written changes. From 2026-11-11 on, agents commit only under an agent identity.
+
 Collin's **own** autonomy code lives in a separate repository, `landing-pilot`: the mission state machine, frame chain, estimator and abort logic. He writes it himself, without AI-written solutions. It becomes public with its first flight.
 
 ## Architecture
