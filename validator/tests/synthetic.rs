@@ -221,7 +221,7 @@ fn cli_usage_and_invalid_evidence() {
     let output = Command::new(env!("CARGO_BIN_EXE_plv")).output().unwrap(); assert_eq!(output.status.code(), Some(2));
     let run = Run::new(); run.write("result.json", "{");
     let output = Command::new(env!("CARGO_BIN_EXE_plv")).arg("check").arg(&run.0).output().unwrap();
-    assert_eq!(output.status.code(), Some(1)); assert!(String::from_utf8_lossy(&output.stderr).contains("INVALID:"));
+    assert_eq!(output.status.code(), Some(3)); assert!(String::from_utf8_lossy(&output.stderr).contains("INVALID:"));
 }
 
 #[test]

@@ -226,3 +226,6 @@ The writer must separately establish those mission conditions.
 Validate completed, quiescent run directories. File-type checks and reads are
 separate operations; concurrent replacement is outside this local validator's
 trust model. Do not validate a directory being modified by another process.
+
+Minimum supported Rust: 1.75.0, confirmed in landing-lab with Ubuntu packaged
+`rustc 1.75.0 (82e1608df 2023-12-21)`. Cargo.toml declares Rust 1.75.
