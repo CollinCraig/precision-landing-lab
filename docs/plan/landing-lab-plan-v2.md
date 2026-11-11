@@ -93,13 +93,40 @@ These are the numbers that the council asked for. They apply after the applicati
 - Two clean-environment reproductions of the main result.
 - One independent code review by a person outside the project.
 
-## 7. Upstream contributions
+## 7. Benchmarks and evaluation (D-043)
+
+Everything the lab makes gets a benchmark or an evaluation, from the first step on. Results go into the SQL run store, CI tracks them per commit, and the README shows them.
+
+Rules for every benchmark:
+
+- **Pre-register** each suite before the code that it measures: seeds, conditions, metrics, pass thresholds. Write them in a versioned suite file (for example `evals/suites/m1-calm-v1.toml`).
+- **Hold out** a seed set that the owner never tunes on. Run it only at gates.
+- **Freeze** a suite version once results are reported. A change makes a new version; old results stay.
+- **Count every run.** Report failures, timeouts and exclusions separately. Report negative results.
+- **Show uncertainty:** Wilson intervals for rates, percentiles for times and errors.
+- **Record the environment:** platform commit, pilot commit, ArduPilot version, host load and temperature.
+
+What gets measured:
+
+| Area | Benchmark or evaluation | Owner writes | Agents build |
+|---|---|---|---|
+| Owner's landing code | Land rate, false-abort rate, unsafe descents, touchdown error, bound coverage and width, decision latency; per condition, per commit | Metrics, evaluation runner, analysis, failure reports | Seed and scenario infrastructure, CI jobs, results page |
+| Regression | Each commit runs a fast suite in CI; gates run the held-out suite; a drop beyond a set margin fails CI | Margin and suite choice | CI gate, trend chart |
+| Performance | Frame-chain and estimator throughput and latency; Python vs C++17 module on the same vectors; SITL real-time factor and wall time per run | Benchmark code for his modules (pytest-benchmark, Google Benchmark) | Host-load guard, result storage |
+| AI test agent (step 5) | Distinct failures found per budget vs random and structured search; invalid tool calls; cost and tokens; ≥5 repeats | Agent, judges, evaluation | Sandboxed tool server |
+| Real world (step 4, 6) | Sim-to-real gap: the same metrics on real frames and indoor flights | Analysis | Truth-rig plumbing |
+| Agent team (platform) | Per task: model, effort, review rounds to PASS, defects caught by review, loops, time, usage | Reading and conclusions | The log (`docs/evals/agent-team-log.md`) |
+| Learning | Step tests passed, hint levels used, mastery-gate result, one-week cold-recall check | Own entries in `progress.md` | Gate scripts |
+
+Each step in section 4 ends with a benchmark report. The application milestone (section 5) is the first one: 60 seeds, owner-written runner, CI.
+
+## 8. Upstream contributions
 
 - One upstream pull request per month that the owner writes himself.
 - Start: pymavlink PR #1321. The owner rewrites the fix himself, or he answers the review comments himself.
 - Do not call an open pull request a contribution until it is merged.
 
-## 8. Rules that do not change
+## 9. Rules that do not change
 
 - Agents never write the owner's solutions (charter, tutor rules).
 - The truth boundary and the Rust validator stay in place for every reported result.
