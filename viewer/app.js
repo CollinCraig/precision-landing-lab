@@ -240,10 +240,48 @@
     if (/^(idle|wait|ready|disarm|done|complete|init)/.test(n)) return 'ink-3';
     if (/takeoff|climb|ascen/.test(n)) return 'vblue';
     if (/hold|hover|loiter|settle/.test(n)) return 'amber';
+    if (/search|scan|acqui/.test(n)) return 'cyan';
+    if (/approach|align|track/.test(n)) return 'tdpc';
+    if (/landed|touchdown|on.?ground/.test(n)) return 'landed';
     if (/land|descen|touch/.test(n)) return 'lit';
     return TOKEN_CYCLE[Math.abs(index | 0) % TOKEN_CYCLE.length];
   }
-  const DARK_TEXT_TOKENS = new Set(['cyan', 'tdpc', 'lit', 'amber']);
+
+  /** Relative luminance (WCAG 2.1) of a #rgb or #rrggbb colour; null if it is not a hex colour. */
+  function luminance(hex) {
+    let h = String(hex || '').trim().replace(/^#/, '');
+    if (/^[0-9a-f]{3}$/i.test(h)) h = h.replace(/./g, '$&$&');
+    if (!/^[0-9a-f]{6}$/i.test(h)) return null;
+    const lin = (i) => { const v = parseInt(h.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4);
+  }
+  /** WCAG 2.1 contrast ratio (1 to 21) of two hex colours; NaN if one is not a hex colour. */
+  function contrastRatio(a, b) {
+    const la = luminance(a), lb = luminance(b);
+    if (la === null || lb === null) return NaN;
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  const INK_DARK = '#0d1115', INK_LIGHT = '#ffffff';
+  /** Text colour (dark or white) with the higher contrast on the given background. */
+  function readableOn(bg) {
+    const d = contrastRatio(bg, INK_DARK), l = contrastRatio(bg, INK_LIGHT);
+    return d >= l ? INK_DARK : INK_LIGHT; // NaN compares false: unknown colours get white text
+  }
+
+  /** Signed number with a true minus sign; a value that rounds to zero never shows "−0.00". */
+  function fmtSigned(v, digits) {
+    if (!isNum(v)) return '–';
+    const r = Math.abs(v).toFixed(digits);
+    return (v < 0 && Number(r) !== 0 ? '−' : '+') + r;
+  }
+
+  /** Readable text for an event kind: "state:hold" -> "State: hold", "mode_land" -> "Mode land". */
+  function eventLabel(kind) {
+    const k = String(kind === undefined || kind === null ? '' : kind).trim();
+    if (!k) return '';
+    const txt = k.replace(/_/g, ' ').replace(/\s*:\s*/g, ': ');
+    return txt.charAt(0).toUpperCase() + txt.slice(1);
+  }
 
   /** Resolve ?run= (directory or .json file) to the three URLs; same-origin only. */
   function runUrls(runParam, baseHref) {
@@ -310,7 +348,7 @@
 
   const api = {
     parseViewer, TelemetryStore, runLengths, niceTicks, formatTime, summarizeResult, stateToken, runUrls,
-    lerpAngle, ReplaySource,
+    lerpAngle, ReplaySource, luminance, contrastRatio, readableOn, fmtSigned, eventLabel,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.PLV = api;
@@ -328,7 +366,7 @@
 
   const state = {
     store: new TelemetryStore(), result: null, manifest: null, summary: null,
-    t: 0, dur: 0, playing: false, speed: 1, last: 0, scene: null, events: [], recMode: false, follow: false,
+    t: 0, dur: 0, hasRun: false, playing: false, speed: 1, last: 0, scene: null, events: [], recMode: false, follow: false,
     lastEvt: '', per: null, city: null, cine: null,
   };
   // presentation: onboard inset (pip), which view fills the card (main), M3 HUD on/off, camera spec
@@ -341,11 +379,12 @@
     return e;
   }
 
-  /* ---------- theme ---------- */
+  /* ---------- theme (the key is shared with learn/ and design/) ---------- */
+  const THEME_KEY = 'pll-theme';
   function applyTheme(theme) {
     if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
     else document.documentElement.removeAttribute('data-theme');
-    try { if (theme) localStorage.setItem('plv-theme', theme); } catch (e) { /* storage unavailable */ }
+    try { if (theme) localStorage.setItem(THEME_KEY, theme); } catch (e) { /* storage unavailable */ }
     afterThemeChange();
   }
   function currentTheme() {
@@ -466,7 +505,8 @@
     const lt = st.labelTable();
     const stateColor = (r) => {
       const tok = stateToken(lt.names[r.code], r.code);
-      return { bg: tokenColor(tok), fg: DARK_TEXT_TOKENS.has(tok) ? '#0d1115' : '#ffffff' };
+      const bg = tokenColor(tok);
+      return { bg, fg: readableOn(bg) };
     };
     const runsA = runLengths(tt, lt.codes, end);
     bandRow($('bandState'), runsA, lt.names, stateColor, (r) => lt.names[r.code] + ' · ' + r.t0.toFixed(1) + '–' + r.t1.toFixed(1) + ' s', true);
@@ -474,14 +514,14 @@
     const runsM = runLengths(tt, st.cols.mode, end);
     bandRow($('bandMode'), runsM, st.modes, () => null, (r) => 'mode ' + st.modes[r.code] + ' · ' + r.t0.toFixed(1) + '–' + r.t1.toFixed(1) + ' s', true);
     const runsR = runLengths(tt, st.cols.armed, end);
-    bandRow($('bandArmed'), runsR, ['disarmed', 'armed'], (r) => (r.code ? { bg: css('amber'), fg: '#0d1115' } : null), (r) => (r.code ? 'armed' : 'disarmed') + ' · ' + r.t0.toFixed(1) + '–' + r.t1.toFixed(1) + ' s', false);
+    bandRow($('bandArmed'), runsR, ['disarmed', 'armed'], (r) => (r.code ? { bg: css('amber'), fg: INK_DARK } : null), (r) => (r.code ? 'armed' : 'disarmed') + ' · ' + r.t0.toFixed(1) + '–' + r.t1.toFixed(1) + ' s', false);
     // event ticks on the state band
     const ev = $('eventTicks');
     ev.textContent = '';
     state.events.forEach((e) => {
       const m = el('i', e.failed ? 'ev bad' : 'ev');
       m.style.left = (state.dur ? (e.t / state.dur) * 100 : 0) + '%';
-      m.title = e.t.toFixed(1) + ' s · ' + e.kind;
+      m.title = e.t.toFixed(1) + ' s · ' + eventLabel(e.kind);
       ev.appendChild(m);
     });
   }
@@ -518,10 +558,12 @@
     b.hidden = !msg;
     b.textContent = msg || '';
     b.className = 'banner chrome' + (kind ? ' ' + kind : '');
+    b.setAttribute('role', kind === 'bad' ? 'alert' : 'status');
   }
 
   function setRun(bundle) {
     state.store = bundle.store;
+    state.hasRun = true;
     state.result = bundle.result;
     state.manifest = bundle.manifest;
     const res = bundle.result;
@@ -535,6 +577,7 @@
     const pr = root.PLVHud ? root.PLVHud.parsePerception(bundle.raw) : { data: null, warning: null };
     state.per = pr.data;
     showBanner(bundle.store.length ? (pr.warning || '') : 'This run has no telemetry samples (empty series).', 'warn');
+    syncEmpty();
     applyCamera();
     if (state.scene) state.scene.setData(bundle.store);
     renderHeader();
@@ -576,6 +619,14 @@
     const ok = (list) => (Array.isArray(list) ? list : []).filter((s) => s && typeof s.path === 'string' && typeof s.label === 'string');
     add('Sample runs (synthetic)', ok(idx.samples));
     add('M3 preview (synthetic, proposed v2 data)', ok(idx.previews));
+    const picks = $('emptyPicks');
+    picks.textContent = '';
+    ok(idx.samples).concat(ok(idx.previews)).slice(0, 4).forEach((it) => {
+      const b = el('button', 'btn', it.label.replace(/\s*\(synthetic[^)]*\)\s*$/i, ''));
+      b.type = 'button';
+      b.addEventListener('click', () => { loadFromParam(it.path, true).then(() => fillPickerValue(it.path)); });
+      picks.appendChild(b);
+    });
     // Best effort: directory listing from python's http.server at ../runs/ (git-ignored local runs).
     let runs = [];
     try {
@@ -590,6 +641,10 @@
     const ph = el('option', null, 'Choose a run…');
     ph.value = '';
     sel.insertBefore(ph, sel.firstChild);
+    fillPickerValue(current);
+  }
+  function fillPickerValue(current) {
+    const sel = $('runSelect');
     const norm = (p) => (p || '').replace(/\/?$/, '/');
     const hit = Array.from(sel.options).find((o) => o.value && norm(o.value) === norm(current));
     sel.value = hit ? hit.value : '';
@@ -599,8 +654,11 @@
   function syncPlayButton() {
     const b = $('playBtn');
     const playing = state.cine ? !state.cine.paused && state.cine.d && state.cine.d.phase !== 'end' : state.playing;
-    b.textContent = playing ? 'Pause' : (state.t >= state.dur - 1e-6 && state.dur > 0.01 ? 'Replay' : 'Play');
+    const label = playing ? 'Pause' : (state.t >= state.dur - 1e-6 && state.dur > 0.01 ? 'Replay' : 'Play');
+    $('playLbl').textContent = label;
+    b.dataset.state = label.toLowerCase();
     b.setAttribute('aria-pressed', playing ? 'true' : 'false');
+    b.disabled = !state.store.length;
     document.querySelectorAll('#speeds button').forEach((x) => x.setAttribute('aria-pressed', String(+x.dataset.speed === state.speed)));
   }
   function setTime(t) { if (state.cine) stopCine(); state.t = Math.min(Math.max(t, 0), state.dur); render(); syncPlayButton(); }
@@ -631,25 +689,25 @@
     $('scrub').setAttribute('aria-valuetext', T);
     let evt = '';
     for (const e of state.events) if (e.t <= state.t + 1e-9) evt = e.kind;
-    if (evt !== state.lastEvt) { state.lastEvt = evt; $('evtNow').textContent = evt; $('hudEvt').textContent = evt; }
+    if (evt !== state.lastEvt) { state.lastEvt = evt; $('evtNow').textContent = eventLabel(evt); $('hudEvt').textContent = eventLabel(evt); }
     if (!s) { $('hudAlt').textContent = '–'; $('hudVs').textContent = '–'; if (state.scene) state.scene.update(null, 0); return; }
     const st = state.store;
     const lt = st.labelTable();
     const sname = st.hasState ? st.states[s.state] : st.modes[s.mode];
     const tok = stateToken(lt.names[s.code], s.code);
     $('hudAlt').textContent = s.alt.toFixed(2);
-    $('hudVs').textContent = (-s.vz >= 0 ? '+' : '−') + Math.abs(s.vz).toFixed(2);
+    $('hudVs').textContent = fmtSigned(-s.vz, 2);
     const chip = $('hudState');
     chip.textContent = sname || '';
     chip.style.background = tokenColor(tok);
-    chip.style.color = DARK_TEXT_TOKENS.has(tok) ? '#0d1115' : '#fff';
+    chip.style.color = readableOn(tokenColor(tok));
     $('hudFmode').textContent = st.modes[s.mode] || '';
     $('hudArm').textContent = s.armed ? 'ARMED' : 'DISARMED';
     $('hudArm').className = s.armed ? 'armed' : '';
     $('valAlt').textContent = s.alt.toFixed(2) + ' m';
-    $('valVz').textContent = (-s.vz >= 0 ? '+' : '−') + Math.abs(s.vz).toFixed(2) + ' m/s';
+    $('valVz').textContent = fmtSigned(-s.vz, 2) + ' m/s';
     if (state.scene) state.scene.update(s, state.playing ? 1 : 0);
-    presentFrame(s, { label: sname || '', color: tokenColor(tok), fg: DARK_TEXT_TOKENS.has(tok) ? '#0d1115' : '#fff' });
+    presentFrame(s, { label: sname || '', color: tokenColor(tok), fg: readableOn(tokenColor(tok)) });
   }
 
   function tick(now) {
@@ -724,6 +782,7 @@
   /** What is on screen now; cinematic mode overrides the user's view choices. */
   function effectiveView() {
     if (state.cine) return { main: 'scene', pip: !!state.cine.pip, hud: false };
+    if (!state.scene || !state.store.length) return { main: 'scene', pip: false, hud: false };
     return { main: pres.main, pip: pres.pip, hud: pres.hud && pres.main === 'onboard' };
   }
   const setHidden = (node, on) => { if (on) node.setAttribute('hidden', ''); else node.removeAttribute('hidden'); }; // works for SVG too
@@ -774,19 +833,30 @@
     render();
   }
   function syncViewButtons() {
-    $('pipBtn').setAttribute('aria-pressed', String(pres.pip));
-    $('swapBtn').setAttribute('aria-pressed', String(pres.main === 'onboard'));
-    $('hudBtn').setAttribute('aria-pressed', String(pres.hud && pres.main === 'onboard'));
+    const e = effectiveView(); // the buttons show what is on screen (cinematic mode overrides the choices)
+    $('pipBtn').setAttribute('aria-pressed', String(e.pip));
+    $('swapBtn').setAttribute('aria-pressed', String(e.main === 'onboard'));
+    $('hudBtn').setAttribute('aria-pressed', String(e.hud));
     $('cineBtn').setAttribute('aria-pressed', String(!!state.cine));
   }
-  function setPip(on) { if (state.cine) stopCine(); pres.pip = on; layoutViews(); }
+  /** View controls need the 3D scene and a run. */
+  const canPresent = () => !!state.scene && state.store.length > 0;
+  function syncEmpty() {
+    const empty = !state.store.length;
+    $('sceneCard').classList.toggle('norun', empty);
+    $('emptyState').hidden = state.hasRun;
+    ['pipBtn', 'swapBtn', 'hudBtn', 'cineBtn'].forEach((id) => { $(id).disabled = !canPresent(); });
+  }
+  function setPip(on) { if (!canPresent()) return; if (state.cine) stopCine(); pres.pip = on; layoutViews(); }
   function swapViews() {
+    if (!canPresent()) return;
     if (state.cine) stopCine();
     pres.main = pres.main === 'onboard' ? 'scene' : 'onboard';
     if (pres.main === 'scene' && !pres.pip) pres.pip = true;
     layoutViews();
   }
   function toggleHud() {
+    if (!canPresent()) return;
     if (state.cine) stopCine();
     if (pres.main !== 'onboard') { pres.main = 'onboard'; pres.hud = true; } else pres.hud = !pres.hud;
     layoutViews();
@@ -841,7 +911,7 @@
     };
   }
   function startCine() {
-    if (!state.store.length || !root.PLVCine || !pres.cineOv) return;
+    if (!canPresent() || !root.PLVCine || !pres.cineOv) return;
     const st = state.store, lt = st.labelTable();
     const plan = root.PLVCine.planCine({ dur: state.dur, speed: state.speed, runs: runLengths(st.cols.t, lt.codes, state.dur), names: lt.names });
     state.cine = { plan, c: 0, cam: null, paused: false, snap: true, pip: false, d: root.PLVCine.cineAt(plan, 0) };
@@ -885,7 +955,7 @@
   const CAMS = ['chase', 'orbit', 'top', 'city', 'pad'], TODS = ['day', 'golden', 'dusk'];
 
   function createScene(container, city) {
-    if (typeof THREE === 'undefined' || !root.PLVWorld) throw new Error('three.js did not load (offline?). Charts and timeline still work.');
+    if (typeof THREE === 'undefined' || !root.PLVWorld) throw new Error('three.js did not load. Make sure that the network is available. The charts and the timeline continue to work.');
     return root.PLVWorld.createWorld({
       container, city, cam: sceneOpts.cam, tod: sceneOpts.tod, quality: sceneOpts.q,
       mono: css('mono') || 'monospace',
@@ -926,7 +996,7 @@
     document.documentElement.style.setProperty('--rgutter', RGUTTER + 'px');
     const params = new URLSearchParams(location.search);
     let theme = params.get('theme');
-    if (theme !== 'light' && theme !== 'dark') { try { theme = localStorage.getItem('plv-theme'); } catch (e) { theme = null; } }
+    if (theme !== 'light' && theme !== 'dark') { try { theme = localStorage.getItem(THEME_KEY) || localStorage.getItem('plv-theme'); } catch (e) { theme = null; } }
     if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
 
     // scene options: URL (cam, tod, q, wind) > stored quality > device default
@@ -964,8 +1034,12 @@
         if (state.store.length) state.scene.setData(state.store);
         render();
       } catch (e) {
-        $('scene').appendChild(el('div', 'noscene', '3D view unavailable: ' + e.message));
+        $('scene').appendChild(el('div', 'noscene', 'The 3D view is not available. ' + e.message));
+        $('sceneCard').classList.add('no3d');
+        document.querySelectorAll('#camSeg button, #todSeg button, #qSeg button, #resetBtn, #followBtn').forEach((b) => { b.disabled = true; });
       }
+      $('sceneLoading').hidden = true;
+      syncEmpty();
       syncViewbar();
     })();
     root.PLVDebug = {
@@ -992,13 +1066,17 @@
     syncViewbar();
     document.querySelectorAll('#speeds button').forEach((b) => b.addEventListener('click', () => setSpeed(+b.dataset.speed)));
     $('runSelect').addEventListener('change', (ev) => { if (ev.target.value) loadFromParam(ev.target.value, true); });
+    $('fileBtn').addEventListener('click', () => $('fileInput').click());
     $('fileInput').addEventListener('change', (ev) => { if (ev.target.files.length) loadFromFiles(ev.target.files); ev.target.value = ''; });
     window.addEventListener('dragover', (ev) => ev.preventDefault());
     window.addEventListener('drop', (ev) => { ev.preventDefault(); if (ev.dataTransfer && ev.dataTransfer.files.length) loadFromFiles(ev.dataTransfer.files); });
     window.addEventListener('keydown', (ev) => {
       if (ev.target && /^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName)) return;
       if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
-      if (ev.key === ' ') { togglePlay(); ev.preventDefault(); }
+      const onControl = !!(ev.target && ev.target.closest && ev.target.closest('button, a[href], summary, label'));
+      if (ev.key === ' ') { if (onControl) return; togglePlay(); ev.preventDefault(); }
+      else if (ev.key === 'Enter' && onControl) return;
+      else if (ev.key === '?') toggleHelp();
       else if (ev.key === 'r' || ev.key === 'R') setRecMode(!state.recMode);
       else if (ev.key === 'Escape' && state.recMode) setRecMode(false);
       else if (ev.key === 't' || ev.key === 'T') applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');
@@ -1045,7 +1123,13 @@
     $('runId').textContent = 'No run loaded';
     state.summary = { verdict: 'unknown', mode: null, rows: [] };
     $('pills').textContent = '';
-    showBanner('Pick a sample run above, add ?run=<directory> to the URL, or load viewer.json (plus result.json and manifest.json) from disk.', 'info');
+    showBanner('');
+    syncEmpty();
+  }
+  function toggleHelp() {
+    const d = $('help');
+    d.open = !d.open;
+    if (d.open && d.scrollIntoView) d.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
 
   boot();

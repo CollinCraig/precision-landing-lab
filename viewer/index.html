@@ -18,10 +18,11 @@
     </div>
     <div class="tools">
       <select id="runSelect" aria-label="Choose a run"><option value="">Choose a run…</option></select>
-      <label class="btn" for="fileInput" title="Select viewer.json, plus result.json and manifest.json, from disk">Load files…</label>
+      <button class="btn" id="fileBtn" type="button" title="Select viewer.json, plus result.json and manifest.json, from disk">Load files…</button>
       <input id="fileInput" type="file" accept=".json,application/json" multiple hidden>
-      <button class="btn" id="recBtn" type="button" aria-pressed="false" title="Recording mode (R): hide all controls for screen capture">● Recording mode</button>
-      <button class="btn" id="themeBtn" type="button" aria-label="Toggle light or dark theme" title="Theme (T)">◐ Theme</button>
+      <button class="btn" id="recBtn" type="button" aria-pressed="false" title="Recording mode (R): hide all controls for screen capture"><span class="recdot" aria-hidden="true"></span>Recording mode</button>
+      <a class="btn" id="learnLink" href="../learn/index.html" title="Open the learning pages">Learn</a>
+      <button class="btn" id="themeBtn" type="button" aria-label="Change between light and dark theme" title="Theme (T)"><svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.25" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.75a6.25 6.25 0 0 1 0 12.5z" fill="currentColor"/></svg>Theme</button>
     </div>
   </header>
 
@@ -37,8 +38,9 @@
   <div id="banner" class="banner chrome" hidden></div>
 
   <main>
-    <section class="scenecard" id="sceneCard" aria-label="3D replay">
+    <section class="scenecard norun" id="sceneCard" aria-label="3D replay">
       <div id="scene"></div>
+      <div id="sceneLoading" class="scene-loading" role="status"><span class="spin" aria-hidden="true"></span>Loading the 3D scene…</div>
       <div class="hud" aria-hidden="true">
         <div class="hud-tl">
           <div><span class="k">RUN</span> <span id="hudRun"></span></div>
@@ -57,7 +59,15 @@
       <div id="pip" class="pip" hidden>
         <svg id="pipSvg" class="pip-svg" viewBox="0 0 640 480" preserveAspectRatio="none" aria-hidden="true"></svg>
         <div class="pip-label" aria-hidden="true"><span class="dot"></span><span id="pipLabel">ONBOARD ↓</span> <b id="pipSub">SIMULATED PREVIEW</b></div>
-        <button id="pipSwap" class="pip-swap" type="button" title="Swap main view and inset (V)" aria-label="Swap main view and inset"></button>
+        <button id="pipSwap" class="pip-swap" type="button" title="Swap main view and inset (V)" aria-label="Swap main view and inset"><svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5.5h11M10.5 3l2.5 2.5L10.5 8M14 10.5H3M5.5 8L3 10.5 5.5 13"/></svg></button>
+      </div>
+      <div id="emptyState" class="empty">
+        <div class="empty-card">
+          <div class="eyebrow">Replay viewer</div>
+          <h2>Select a run</h2>
+          <p>Select a sample flight. You can also load <code>viewer.json</code> from disk, or drop the file on this page.</p>
+          <div id="emptyPicks" class="empty-picks"></div>
+        </div>
       </div>
       <div id="cine" class="cine" aria-hidden="true" hidden></div>
       <div class="rec-progress"><div id="recBand" class="band"></div><i class="rec-head"></i></div>
@@ -94,7 +104,7 @@
 
     <section class="panel chrome" id="panel" aria-label="Timeline and charts">
       <div class="transport">
-        <button class="btn primary" id="playBtn" type="button" aria-pressed="false">Play</button>
+        <button class="btn primary" id="playBtn" type="button" aria-pressed="false" data-state="play" title="Play or pause (Space)"><span class="pico" aria-hidden="true"></span><span id="playLbl">Play</span></button>
         <div id="speeds" class="speeds" role="group" aria-label="Playback speed">
           <button type="button" data-speed="0.5" aria-pressed="false">0.5×</button>
           <button type="button" data-speed="1" aria-pressed="true">1×</button>
@@ -110,7 +120,7 @@
         <div class="row ticks"><div id="timeTicks" class="tickrow"></div></div>
         <div class="row">
           <span class="lbl">STATE</span>
-          <div id="scrub" class="track" data-scrub role="slider" tabindex="0" aria-label="Replay position" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
+          <div id="scrub" class="track scrub" data-scrub role="slider" tabindex="0" aria-label="Replay position" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
             <div id="bandState" class="band tall"></div>
             <div id="eventTicks" class="events"></div>
           </div>
@@ -124,9 +134,52 @@
   </main>
 
   <footer class="chrome">
-    Simulation only; no real vehicles or airspace. The city is a procedural model, not a real place. Keys: <kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> step · <kbd>1</kbd>–<kbd>4</kbd> speed · <kbd>C</kbd> camera · <kbd>L</kbd> time of day · <kbd>Q</kbd> quality · <kbd>O</kbd> onboard inset · <kbd>V</kbd> swap views · <kbd>H</kbd> M3 HUD · <kbd>K</kbd> cinematic · <kbd>R</kbd> recording mode · <kbd>T</kbd> theme.
-    The onboard camera is a simulated preview from this 3D scene; real camera frames come from Gazebo in M2.
-    URL: <code>?run=&lt;dir&gt;&amp;t=&lt;s&gt;&amp;autoplay=1&amp;speed=2&amp;rec=1&amp;theme=dark&amp;cam=chase|orbit|top|city|pad&amp;tod=day|golden|dusk&amp;q=low|high&amp;wind=&lt;from_deg&gt;,&lt;m/s&gt;&amp;pip=0|1&amp;view=onboard&amp;hud=0|1&amp;cfov=&lt;deg&gt;&amp;cres=640x480&amp;cine=1</code>
+    <p>Simulation only. No real vehicles or airspace. The city is a procedural model, not a real place. The onboard camera is a simulated preview from this 3D scene. Real camera frames come from Gazebo in M2.</p>
+    <details class="help" id="help">
+      <summary>Keys and URL parameters</summary>
+      <div class="help-grid">
+        <div>
+          <h2>Keys</h2>
+          <dl class="defs">
+            <div><dt><kbd>Space</kbd></dt><dd>Play or pause</dd></div>
+            <div><dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Step 0.5 s. Hold <kbd>Shift</kbd> for 5 s</dd></div>
+            <div><dt><kbd>Home</kbd> <kbd>End</kbd></dt><dd>Go to the start or the end</dd></div>
+            <div><dt><kbd>1</kbd>–<kbd>4</kbd></dt><dd>Speed: 0.5×, 1×, 2×, 4×</dd></div>
+            <div><dt><kbd>C</kbd></dt><dd>Next camera</dd></div>
+            <div><dt><kbd>L</kbd></dt><dd>Next time of day</dd></div>
+            <div><dt><kbd>Q</kbd></dt><dd>Quality: low or high</dd></div>
+            <div><dt><kbd>O</kbd></dt><dd>Onboard inset on or off</dd></div>
+            <div><dt><kbd>V</kbd></dt><dd>Swap the main view and the inset</dd></div>
+            <div><dt><kbd>H</kbd></dt><dd>M3 HUD on or off</dd></div>
+            <div><dt><kbd>K</kbd></dt><dd>Cinematic mode</dd></div>
+            <div><dt><kbd>R</kbd></dt><dd>Recording mode. <kbd>Esc</kbd> stops it</dd></div>
+            <div><dt><kbd>T</kbd></dt><dd>Light or dark theme</dd></div>
+            <div><dt><kbd>?</kbd></dt><dd>Open or close this help</dd></div>
+          </dl>
+        </div>
+        <div>
+          <h2>URL parameters</h2>
+          <dl class="defs wide">
+            <div><dt><code>run=&lt;dir&gt;</code></dt><dd>Run directory to load</dd></div>
+            <div><dt><code>t=&lt;s&gt;</code></dt><dd>Start time in seconds</dd></div>
+            <div><dt><code>autoplay=1</code></dt><dd>Start playback after the load</dd></div>
+            <div><dt><code>speed=0.5|1|2|4</code></dt><dd>Playback speed</dd></div>
+            <div><dt><code>rec=1</code></dt><dd>Recording mode</dd></div>
+            <div><dt><code>cine=1</code></dt><dd>Cinematic mode</dd></div>
+            <div><dt><code>theme=light|dark</code></dt><dd>Theme</dd></div>
+            <div><dt><code>cam=chase|orbit|top|city|pad</code></dt><dd>Camera</dd></div>
+            <div><dt><code>tod=day|golden|dusk</code></dt><dd>Time of day</dd></div>
+            <div><dt><code>q=low|high</code></dt><dd>Render quality</dd></div>
+            <div><dt><code>wind=&lt;from_deg&gt;,&lt;m/s&gt;</code></dt><dd>Wind for the windsock</dd></div>
+            <div><dt><code>pip=0|1</code></dt><dd>Onboard inset</dd></div>
+            <div><dt><code>view=onboard</code></dt><dd>Onboard camera as the main view</dd></div>
+            <div><dt><code>hud=0|1</code></dt><dd>M3 HUD</dd></div>
+            <div><dt><code>cfov=&lt;deg&gt;</code></dt><dd>Camera horizontal field of view</dd></div>
+            <div><dt><code>cres=640x480</code></dt><dd>Camera resolution</dd></div>
+          </dl>
+        </div>
+      </div>
+    </details>
   </footer>
 </div>
 <!-- three.js r170 and its addons, pinned to exact versions. If they fail to load, the viewer still runs without the 3D view. -->

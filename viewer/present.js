@@ -51,7 +51,7 @@
     // top-left meta
     const tl = s('g', { transform: 'translate(44 74)' }, L);
     s('circle', { cx: 6, cy: -5, r: 6, fill: '#ff4a3d', class: 'blink' }, tl);
-    const camTxt = s('text', { x: 20, y: 0, 'font-size': 17, 'font-weight': 600, 'letter-spacing': 1.2 }, tl);
+    const camTxt = s('text', { x: 20, y: 0, 'font-size': 15, 'font-weight': 600, 'letter-spacing': 1 }, tl);
     s('text', { x: 20, y: 24, 'font-size': 13.5, 'font-weight': 600, 'letter-spacing': 2, fill: C.cyan }, tl, 'SIMULATED PREVIEW');
     const tSim = s('text', { x: 20, y: 46, 'font-size': 14.5, opacity: '.75' }, tl);
     // chips
@@ -59,7 +59,7 @@
     let chipKey = '', chipEls = [];
     // top-right mode
     const tr = s('g', { transform: 'translate(1236 74)', 'text-anchor': 'end' }, L);
-    const modeTxt = s('text', { 'font-size': 17, 'font-weight': 600, 'letter-spacing': 1.5 }, tr);
+    const modeTxt = s('text', { 'font-size': 15, 'font-weight': 600, 'letter-spacing': 1.2 }, tr);
     const srcTxt = s('text', { y: 24, 'font-size': 14.5, opacity: '.75' }, tr);
     // search ring
     const searchG = s('g', { opacity: 0 }, L);
@@ -153,7 +153,7 @@
       const key = list.map((c) => c.label).join('|');
       if (key !== chipKey) {
         chipKey = key; chips.textContent = ''; chipEls = [];
-        const n = Math.max(1, list.length), gap = 8, cw = Math.min(112, (600 - gap * (n - 1)) / n), x0 = -(n * cw + (n - 1) * gap) / 2;
+        const n = Math.max(1, list.length), gap = 8, cw = Math.min(100, (560 - gap * (n - 1)) / n), x0 = -(n * cw + (n - 1) * gap) / 2;
         list.forEach((c, k) => {
           const g = s('g', { transform: 'translate(' + f1(x0 + k * (cw + gap) + cw / 2) + ' 0)' }, chips);
           const r = s('rect', { x: f1(-cw / 2), y: -4, width: f1(cw), height: 34, rx: 6 }, g);
