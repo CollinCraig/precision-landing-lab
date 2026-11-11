@@ -109,3 +109,43 @@ test('shipped sample runs parse and agree with their result.json', () => {
     assert.equal(result.run_id, store.runId);
   }
 });
+
+test('stateToken gives each M3 phase its own colour', () => {
+  const toks = ['takeoff', 'search', 'approach', 'descend', 'landed'].map((n, i) => P.stateToken(n, i));
+  assert.equal(new Set(toks).size, toks.length);
+  assert.equal(P.stateToken('land', 3), 'lit');
+  assert.equal(P.stateToken('landed', 5), 'landed');
+  assert.equal(P.stateToken('target_lost', 2), 'red');
+});
+
+test('contrastRatio follows WCAG 2.1 and readableOn picks the stronger text colour', () => {
+  assert.equal(P.contrastRatio('#000000', '#ffffff'), 21);
+  assert.equal(P.contrastRatio('#fff', '#ffffff'), 1);
+  assert.ok(Math.abs(P.contrastRatio('#777777', '#ffffff') - 4.48) < 0.01);
+  assert.ok(Number.isNaN(P.contrastRatio('rgb(0,0,0)', '#fff')));
+  assert.equal(P.luminance('not a colour'), null);
+  assert.equal(P.readableOn('#2a5bd7'), '#ffffff'); // light-theme blue
+  assert.equal(P.readableOn('#7d9dff'), '#0d1115'); // dark-theme blue: white text has 2.6:1 only
+  assert.equal(P.readableOn('#f0c02e'), '#0d1115');
+  assert.equal(P.readableOn('var(--x)'), '#ffffff');
+  for (const bg of ['#2a5bd7', '#7d9dff', '#626a73', '#8a949e', '#06788f', '#3fd0ee', '#f0c02e', '#2fd16b', '#1a7a3e', '#1f9a52', '#d98a00', '#cf3a2c']) {
+    assert.ok(P.contrastRatio(bg, P.readableOn(bg)) >= 4.5, bg + ' label contrast');
+  }
+});
+
+test('fmtSigned never shows a negative zero', () => {
+  assert.equal(P.fmtSigned(1.756, 2), '+1.76');
+  assert.equal(P.fmtSigned(-0.32, 2), '−0.32');
+  assert.equal(P.fmtSigned(-0.004, 2), '+0.00');
+  assert.equal(P.fmtSigned(0, 2), '+0.00');
+  assert.equal(P.fmtSigned(-0.005, 1), '+0.0');
+  assert.equal(P.fmtSigned(NaN, 2), '–');
+});
+
+test('eventLabel makes event kinds readable', () => {
+  assert.equal(P.eventLabel('state:hold'), 'State: hold');
+  assert.equal(P.eventLabel('mode_land'), 'Mode land');
+  assert.equal(P.eventLabel('wait_altitude_timeout'), 'Wait altitude timeout');
+  assert.equal(P.eventLabel(''), '');
+  assert.equal(P.eventLabel(undefined), '');
+});

@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# sitl-up: start the pinned ArduPilot Copter SITL binary directly (no MAVProxy).
+# Run it inside the landing-lab container. See docs/sitl-up.md.
+set -euo pipefail
+
+# Pins (D-038 M1-P2). Override only for tests. An override that differs from the pin prints a warning.
+BUILTIN_COMMIT="fb773567896014da007bca58358704d4a0d8516f"
+BUILTIN_SHA256="4caa3e509113eb1622383fa55f11a0078f2526042481095c056a22d04c1b9b95"
+PIN_COMMIT="${SITL_SRC_COMMIT:-$BUILTIN_COMMIT}"
+PIN_SHA256="${SITL_BIN_SHA256:-$BUILTIN_SHA256}"
+[ "$PIN_COMMIT" = "$BUILTIN_COMMIT" ] || echo "sitl-up: WARNING: SITL_SRC_COMMIT overrides the pinned source commit." >&2
+[ "$PIN_SHA256" = "$BUILTIN_SHA256" ] || echo "sitl-up: WARNING: SITL_BIN_SHA256 overrides the pinned binary hash." >&2
+
+SRC="${SITL_SRC_DIR:-$HOME/src/ardupilot}"
+WORKDIR="${SITL_WORKDIR:-$HOME/sitl-run}"
+HOME_LOC="-35.363261,149.165230,584,353" # CMAC, from Tools/autotest/locations.txt
+# SITL cannot bind TCP to 127.0.0.1 (it binds all interfaces), so SERIAL0 uses a UDP client to loopback.
+# MAVProxy connects with udpin:127.0.0.1:14550.
+SERIAL0="udpclient:127.0.0.1:14550"
+LOCK_FILE="${SITL_LOCK_FILE:-${XDG_RUNTIME_DIR:-$HOME/.cache}/sitl-up.lock}"
+UDP_OUT=""
+WIPE=1
+PRINT=0
+
+usage() {
+  cat <<USAGE
+Usage: scripts/sitl-up [options]
+  --print            Print the command and exit. Do not start SITL.
+  --udp-out HOST:PORT  Also send MAVLink over UDP from SERIAL1. HOST must be 127.0.0.1.
+                     The port must differ from 14550 (SERIAL0).
+  --no-wipe          Keep the parameters in the work directory.
+  --workdir DIR      Work directory (default: \$HOME/sitl-run).
+  -h, --help         Show this text.
+Environment: SITL_SRC_DIR (default \$HOME/src/ardupilot), SITL_WORKDIR, SITL_LOCK_FILE.
+The script checks the source commit, the source tree, copter.parm and the binary SHA-256 before it starts.
+SERIAL0 is udpclient:127.0.0.1:14550. Connect MAVProxy with --master=udpin:127.0.0.1:14550.
+USAGE
+}
+
+die() { echo "sitl-up: $*" >&2; exit 2; }
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --print) PRINT=1 ;;
+    --no-wipe) WIPE=0 ;;
+    --udp-out) [ $# -ge 2 ] || die "--udp-out needs HOST:PORT"; UDP_OUT="$2"; shift ;;
+    --workdir)
+      [ $# -ge 2 ] || die "--workdir needs DIR"
+      case "$2" in -*) die "--workdir needs DIR, not an option: $2" ;; esac
+      WORKDIR="$2"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; die "unknown option: $1" ;;
+  esac
+  shift
+done
+
+if [ -n "$UDP_OUT" ]; then
+  [[ "$UDP_OUT" =~ ^127\.0\.0\.1:([0-9]{1,5})$ ]] || die "--udp-out must be 127.0.0.1:PORT"
+  port="${BASH_REMATCH[1]}"
+  [ $((10#$port)) -ge 1024 ] && [ $((10#$port)) -le 65535 ] || die "--udp-out port must be 1024..65535"
+  [ $((10#$port)) -ne 14550 ] || die "--udp-out port must differ from 14550 (SERIAL0)"
+fi
+[ "$(id -u)" -ne 0 ] || die "do not run as root"
+
+# Make paths absolute before any cd.
+abspath() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$PWD" "$1" ;; esac; }
+SRC="$(abspath "$SRC")"
+WORKDIR="$(abspath "$WORKDIR")"
+LOCK_FILE="$(abspath "$LOCK_FILE")"
+
+BIN="$SRC/build/sitl/bin/arducopter"
+AUTOTEST="$SRC/Tools/autotest"
+DEFAULTS_REL="Tools/autotest/default_params/copter.parm"
+DEFAULTS="$SRC/$DEFAULTS_REL"
+
+[ -x "$BIN" ] || die "binary not found: $BIN"
+[ -f "$DEFAULTS" ] || die "defaults file not found: $DEFAULTS"
+actual_commit="$(git -C "$SRC" rev-parse HEAD 2>/dev/null)" || die "cannot read source commit in $SRC"
+[ "$actual_commit" = "$PIN_COMMIT" ] || die "source commit $actual_commit differs from pin $PIN_COMMIT"
+# copter.parm must equal the pinned revision. The tree must have no tracked changes.
+git -C "$SRC" show "$PIN_COMMIT:$DEFAULTS_REL" 2>/dev/null | cmp -s - "$DEFAULTS" \
+  || die "defaults file differs from the pinned revision: $DEFAULTS_REL"
+[ -z "$(git -C "$SRC" status --porcelain --untracked-files=no 2>/dev/null)" ] \
+  || die "source tree has uncommitted changes: $SRC"
+actual_sha="$(sha256sum "$BIN" | cut -d' ' -f1)"
+[ "$actual_sha" = "$PIN_SHA256" ] || die "binary sha256 $actual_sha differs from pin $PIN_SHA256"
+
+cmd=("$BIN" --model + --speedup 1 --sysid 1 --home "$HOME_LOC"
+     --defaults "$DEFAULTS" --autotest-dir "$AUTOTEST" --serial0 "$SERIAL0")
+# Close every other serial port. SITL defaults would listen on TCP 5762 and 5763 on all interfaces.
+if [ -n "$UDP_OUT" ]; then cmd+=(--serial1 "udpclient:$UDP_OUT"); else cmd+=(--serial1 none); fi
+cmd+=(--serial2 none)
+[ "$WIPE" -eq 0 ] || cmd+=(--wipe)
+
+if [ "$PRINT" -eq 1 ]; then
+  printf 'cd %q\n' "$WORKDIR"
+  printf '%q ' "${cmd[@]}"; echo
+  exit 0
+fi
+
+# Atomic lock on fd 9. The arducopter process inherits fd 9, so the lock stays until SITL exits.
+command -v flock >/dev/null 2>&1 || die "flock not found (install util-linux)"
+mkdir -p "$(dirname "$LOCK_FILE")"
+exec 9>"$LOCK_FILE"
+flock -n 9 || die "another sitl-up already runs (lock: $LOCK_FILE)"
+mkdir -p "$WORKDIR"
+cd "$WORKDIR"
+exec "${cmd[@]}"

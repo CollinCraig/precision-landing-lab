@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the two SYNTHETIC sample runs for the replay viewer.
+"""Generate the SYNTHETIC sample runs for the replay viewer.
 
 Python standard library only. Run from anywhere:
 
@@ -81,7 +81,7 @@ def write_json(path, obj):
     path.write_text(json.dumps(obj, indent=2) + "\n", encoding="utf-8")
 
 
-def write_viewer(path, run_id, modes, states, series):
+def write_viewer(path, run_id, modes, states, series, perception=None):
     """Header keys one per line, each series on its own line (small diffs)."""
     head = {
         "schema_version": 1,
@@ -100,12 +100,32 @@ def write_viewer(path, run_id, modes, states, series):
     for i, k in enumerate(keys):
         comma = "," if i < len(keys) - 1 else ""
         lines.append(f"    {json.dumps(k)}: {json.dumps(series[k], separators=(',', ':'))}{comma}")
-    lines.append("  }")
+    if perception is None:
+        lines.append("  }")
+    else:
+        # proposed v2 perception block (viewer/FORMAT.md), one stream per line
+        lines.append("  },")
+        lines.append('  "perception": {')
+        pkeys = list(perception)
+        for i, k in enumerate(pkeys):
+            comma = "," if i < len(pkeys) - 1 else ""
+            v = perception[k]
+            if isinstance(v, dict) and any(isinstance(x, list) for x in v.values()):
+                lines.append(f"    {json.dumps(k)}: {{")
+                sub = list(v)
+                for j, sk in enumerate(sub):
+                    c2 = "," if j < len(sub) - 1 else ""
+                    lines.append(f"      {json.dumps(sk)}: {json.dumps(v[sk], separators=(',', ':'))}{c2}")
+                lines.append(f"    }}{comma}")
+            else:
+                lines.append(f"    {json.dumps(k)}: {json.dumps(v)}{comma}")
+        lines.append("  }")
     lines.append("}")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def write_run(run_id, label, profile, series, modes, states, events, success, failure, seed):
+def write_run(run_id, label, profile, series, modes, states, events, success, failure, seed,
+              scenario="m1-first-flight", mode="truth", perception=None, extra_result=None):
     d = OUT / run_id
     d.mkdir(exist_ok=True)
     duration_us = int(round(profile["duration"] * 1_000_000))
@@ -117,8 +137,8 @@ def write_run(run_id, label, profile, series, modes, states, events, success, fa
         "schema_version": 1,
         "run_id": run_id,
         "seed": seed,
-        "scenario": {"name": "m1-first-flight"},
-        "mode": "truth",
+        "scenario": {"name": scenario},
+        "mode": mode,
         "versions": {"ardupilot": "Copter-SYNTHETIC", "container": PLACEHOLDER_IMAGE},
         "git": {"commit": PLACEHOLDER_GIT, "dirty": False},
         "host": "synthetic-sample",
@@ -129,8 +149,8 @@ def write_run(run_id, label, profile, series, modes, states, events, success, fa
         "schema_version": 1,
         "run_id": run_id,
         "seed": seed,
-        "scenario": {"name": "m1-first-flight"},
-        "mode": "truth",
+        "scenario": {"name": scenario},
+        "mode": mode,
         "success": success,
         "failure_reason": failure,
         "duration_us": duration_us,
@@ -138,9 +158,13 @@ def write_run(run_id, label, profile, series, modes, states, events, success, fa
         "tlog_records": len(series["t"]) + int(profile["duration"]) + 1,
         "events": all_events,
     }
+    if extra_result:
+        events_ = result.pop("events")
+        result.update(extra_result)
+        result["events"] = events_
     write_json(d / "manifest.json", manifest)
     write_json(d / "result.json", result)
-    write_viewer(d / "viewer.json", run_id, modes, states, series)
+    write_viewer(d / "viewer.json", run_id, modes, states, series, perception)
     return {"id": run_id, "label": label, "path": f"samples/{run_id}/"}
 
 
@@ -188,7 +212,100 @@ def timeout():
                      modes, states, events, False, failure, 11)
 
 
+def ease_path(legs, t):
+    """Piecewise 2D position; legs: [(t, n, e)], each leg eased with smoothstep."""
+    if t <= legs[0][0]:
+        return legs[0][1], legs[0][2]
+    for (t0, n0, e0), (t1, n1, e1) in zip(legs, legs[1:]):
+        if t <= t1:
+            f = smooth((t - t0) / (t1 - t0))
+            return n0 + (n1 - n0) * f, e0 + (e1 - e0) * f
+    return legs[-1][1], legs[-1][2]
+
+
+def m3_preview():
+    """M3-shaped run with the proposed v2 perception block (estimate + truth). Synthetic."""
+    modes = ["STABILIZE", "GUIDED", "LAND"]
+    states = ["idle", "takeoff", "search", "approach", "descend", "landed"]
+    duration = 34.0
+    alt_keys = [(0, 0), (2.5, 0), (7.5, 7.0), (12.0, 7.0), (18.0, 6.0), (29.6, 0.0), (34.0, 0.0)]
+    path = [(0, 0.0, 0.0), (7.5, 0.0, 0.0), (11.0, 1.45, 1.15), (12.0, 1.45, 1.15), (18.0, 0.12, -0.08), (29.6, 0.046, -0.041), (34.0, 0.046, -0.041)]
+    state_tab = [(0, 0), (2.0, 1), (7.5, 2), (12.0, 3), (18.0, 4), (29.8, 5)]
+    rng = random.Random(23)
+    steps = int(round(duration / DT)) + 1
+    s = {k: [] for k in ("t", "n", "e", "d", "alt", "vz", "mode", "armed", "state", "hdg")}
+    tr = {"t": [], "n": [], "e": [], "d": []}
+    prev = 0.0
+    for i in range(steps):
+        t = round(i * DT, 3)
+        base = keyframes(alt_keys, t)
+        flying = base > 0.05
+        k = min(1.0, base / 2.0)
+        pn, pe = ease_path(path, t)
+        n_true = pn + k * 0.035 * math.sin(0.41 * t + 0.3)
+        e_true = pe + k * 0.035 * math.cos(0.33 * t)
+        alt = max(0.0, base + (rng.gauss(0, 0.01) if flying else 0.0))
+        tr["t"].append(t)
+        tr["n"].append(round(n_true, 4))
+        tr["e"].append(round(e_true, 4))
+        tr["d"].append(round(-alt, 4))
+        # telemetry = truth + a small EKF error
+        s["t"].append(t)
+        s["n"].append(round(n_true + rng.gauss(0, 0.006 * k), 3))
+        s["e"].append(round(e_true + rng.gauss(0, 0.006 * k), 3))
+        s["d"].append(round(-alt, 3))
+        s["alt"].append(round(alt, 3))
+        s["vz"].append(round((-(base - prev) / DT if i else 0.0) + (rng.gauss(0, 0.012) if flying else 0.0), 3))
+        prev = base
+        s["mode"].append(lookup([(0, 0), (1.5, 1), (27.0, 2)], t))
+        s["armed"].append(1 if 2.0 <= t < 31.0 else 0)
+        s["state"].append(lookup(state_tab, t))
+        s["hdg"].append(round((15 + 6 * math.sin(0.15 * t) * k) % 360, 1))
+    est = {"t": [], "valid": [], "confidence": [], "n": [], "e": [], "latency_s": []}
+    for i in range(steps):
+        t = s["t"][i]
+        if t < 7.5 or t > 31.0:
+            continue
+        alt = s["alt"][i]
+        dropout = 23.3 <= t < 23.9
+        valid = 1 if t >= 9.2 and not dropout else 0
+        conf = 0.0
+        if valid:
+            conf = min(0.97, 0.66 + 0.035 * max(0.0, 7.0 - alt) + rng.gauss(0, 0.015))
+        elif dropout:
+            conf = 0.18 + rng.gauss(0, 0.03)
+        sig = 0.006 + 0.004 * alt
+        est["t"].append(t)
+        est["valid"].append(valid)
+        est["confidence"].append(round(max(0.0, min(1.0, conf)), 3))
+        est["n"].append(round(0.012 + rng.gauss(0, sig), 4) if valid else 0.0)
+        est["e"].append(round(-0.008 + rng.gauss(0, sig), 4) if valid else 0.0)
+        est["latency_s"].append(round(0.036 + abs(rng.gauss(0, 0.004)), 4))
+    est = {"source": "camera", **est}
+    perception = {
+        "version": 1,
+        "camera": {"width": 640, "height": 480, "hfov_deg": 70, "rate_hz": 10},
+        "limits": {"horizontal_m": 0.25, "min_confidence": 0.6},
+        "estimate": est,
+        "truth": tr,
+    }
+    err = math.hypot(tr["n"][-1], tr["e"][-1])
+    profile = {"duration": duration}
+    events = [
+        (1.5, "mode_guided"), (2.0, "armed"), (2.0, "state:takeoff"), (7.5, "state:search"),
+        (9.2, "target_acquired"), (12.0, "state:approach"), (18.0, "state:descend"),
+        (23.3, "target_lost"), (23.9, "target_reacquired"), (27.0, "mode_land"),
+        (29.6, "touchdown"), (29.8, "state:landed"), (31.0, "disarmed"),
+    ]
+    extra = {"horizontal_error_m": round(err, 3), "touchdown_speed_mps": 0.31, "time_to_land_s": 11.6}
+    return write_run("sample-m3-preview", "M3 preview: search, approach, descend with estimates (synthetic)", profile, s,
+                     modes, states, events, True, None, 23, scenario="m3-camera-preview", mode="camera",
+                     perception=perception, extra_result=extra)
+
+
 if __name__ == "__main__":
     index = [clean(), timeout()]
-    write_json(OUT / "index.json", {"samples": index})
-    print("wrote", ", ".join(e["id"] for e in index))
+    # runs that use the proposed v2 perception block (FORMAT.md) are listed separately
+    previews = [m3_preview()]
+    write_json(OUT / "index.json", {"samples": index, "previews": previews})
+    print("wrote", ", ".join(e["id"] for e in index + previews))

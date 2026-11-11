@@ -240,10 +240,48 @@
     if (/^(idle|wait|ready|disarm|done|complete|init)/.test(n)) return 'ink-3';
     if (/takeoff|climb|ascen/.test(n)) return 'vblue';
     if (/hold|hover|loiter|settle/.test(n)) return 'amber';
+    if (/search|scan|acqui/.test(n)) return 'cyan';
+    if (/approach|align|track/.test(n)) return 'tdpc';
+    if (/landed|touchdown|on.?ground/.test(n)) return 'landed';
     if (/land|descen|touch/.test(n)) return 'lit';
     return TOKEN_CYCLE[Math.abs(index | 0) % TOKEN_CYCLE.length];
   }
-  const DARK_TEXT_TOKENS = new Set(['cyan', 'tdpc', 'lit', 'amber']);
+
+  /** Relative luminance (WCAG 2.1) of a #rgb or #rrggbb colour; null if it is not a hex colour. */
+  function luminance(hex) {
+    let h = String(hex || '').trim().replace(/^#/, '');
+    if (/^[0-9a-f]{3}$/i.test(h)) h = h.replace(/./g, '$&$&');
+    if (!/^[0-9a-f]{6}$/i.test(h)) return null;
+    const lin = (i) => { const v = parseInt(h.slice(i, i + 2), 16) / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * lin(0) + 0.7152 * lin(2) + 0.0722 * lin(4);
+  }
+  /** WCAG 2.1 contrast ratio (1 to 21) of two hex colours; NaN if one is not a hex colour. */
+  function contrastRatio(a, b) {
+    const la = luminance(a), lb = luminance(b);
+    if (la === null || lb === null) return NaN;
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  const INK_DARK = '#0d1115', INK_LIGHT = '#ffffff';
+  /** Text colour (dark or white) with the higher contrast on the given background. */
+  function readableOn(bg) {
+    const d = contrastRatio(bg, INK_DARK), l = contrastRatio(bg, INK_LIGHT);
+    return d >= l ? INK_DARK : INK_LIGHT; // NaN compares false: unknown colours get white text
+  }
+
+  /** Signed number with a true minus sign; a value that rounds to zero never shows "−0.00". */
+  function fmtSigned(v, digits) {
+    if (!isNum(v)) return '–';
+    const r = Math.abs(v).toFixed(digits);
+    return (v < 0 && Number(r) !== 0 ? '−' : '+') + r;
+  }
+
+  /** Readable text for an event kind: "state:hold" -> "State: hold", "mode_land" -> "Mode land". */
+  function eventLabel(kind) {
+    const k = String(kind === undefined || kind === null ? '' : kind).trim();
+    if (!k) return '';
+    const txt = k.replace(/_/g, ' ').replace(/\s*:\s*/g, ': ');
+    return txt.charAt(0).toUpperCase() + txt.slice(1);
+  }
 
   /** Resolve ?run= (directory or .json file) to the three URLs; same-origin only. */
   function runUrls(runParam, baseHref) {
@@ -293,7 +331,7 @@
         throw new Error(e.message + '. A run needs a viewer.json next to result.json (produced by the exporter, see viewer/FORMAT.md).');
       }
       const [result, manifest] = await Promise.all([fetchJson(urls.result, true), fetchJson(urls.manifest, true)]);
-      return { store: parseViewer(raw), result, manifest, label: urls.dir };
+      return { store: parseViewer(raw), result, manifest, label: urls.dir, raw };
     },
     async fromFiles(fileList) {
       const files = Array.from(fileList);
@@ -303,14 +341,14 @@
       if (!vf) throw new Error('Select viewer.json (and optionally result.json and manifest.json) together.');
       const read = async (f) => { if (!f) return null; try { return JSON.parse(await f.text()); } catch (e) { throw new Error(f.name + ' is not valid JSON'); } };
       const [raw, result, manifest] = await Promise.all([read(vf), read(byName['result.json']), read(byName['manifest.json'])]);
-      return { store: parseViewer(raw), result, manifest, label: vf.name };
+      return { store: parseViewer(raw), result, manifest, label: vf.name, raw };
     },
   };
   // M2+: LiveSource = { connect(url, store) } that calls store.append({t,n,e,d,alt,vz,mode,armed,state,hdg}).
 
   const api = {
     parseViewer, TelemetryStore, runLengths, niceTicks, formatTime, summarizeResult, stateToken, runUrls,
-    lerpAngle, ReplaySource,
+    lerpAngle, ReplaySource, luminance, contrastRatio, readableOn, fmtSigned, eventLabel,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.PLV = api;
@@ -328,9 +366,11 @@
 
   const state = {
     store: new TelemetryStore(), result: null, manifest: null, summary: null,
-    t: 0, dur: 0, playing: false, speed: 1, last: 0, scene: null, events: [], recMode: false, follow: false,
-    lastEvt: '',
+    t: 0, dur: 0, hasRun: false, playing: false, speed: 1, last: 0, scene: null, events: [], recMode: false, follow: false,
+    lastEvt: '', per: null, city: null, cine: null,
   };
+  // presentation: onboard inset (pip), which view fills the card (main), M3 HUD on/off, camera spec
+  const pres = { pip: true, main: 'scene', hud: true, hfov: null, res: null, intr: null, hud3: null, pipOv: null, cineOv: null };
 
   function el(tag, cls, text) {
     const e = document.createElement(tag);
@@ -339,11 +379,12 @@
     return e;
   }
 
-  /* ---------- theme ---------- */
+  /* ---------- theme (the key is shared with learn/ and design/) ---------- */
+  const THEME_KEY = 'pll-theme';
   function applyTheme(theme) {
     if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
     else document.documentElement.removeAttribute('data-theme');
-    try { if (theme) localStorage.setItem('plv-theme', theme); } catch (e) { /* storage unavailable */ }
+    try { if (theme) localStorage.setItem(THEME_KEY, theme); } catch (e) { /* storage unavailable */ }
     afterThemeChange();
   }
   function currentTheme() {
@@ -464,7 +505,8 @@
     const lt = st.labelTable();
     const stateColor = (r) => {
       const tok = stateToken(lt.names[r.code], r.code);
-      return { bg: tokenColor(tok), fg: DARK_TEXT_TOKENS.has(tok) ? '#0d1115' : '#ffffff' };
+      const bg = tokenColor(tok);
+      return { bg, fg: readableOn(bg) };
     };
     const runsA = runLengths(tt, lt.codes, end);
     bandRow($('bandState'), runsA, lt.names, stateColor, (r) => lt.names[r.code] + ' · ' + r.t0.toFixed(1) + '–' + r.t1.toFixed(1) + ' s', true);
@@ -472,14 +514,14 @@
     const runsM = runLengths(tt, st.cols.mode, end);
     bandRow($('bandMode'), runsM, st.modes, () => null, (r) => 'mode ' + st.modes[r.code] + ' · ' + r.t0.toFixed(1) + '–' + r.t1.toFixed(1) + ' s', true);
     const runsR = runLengths(tt, st.cols.armed, end);
-    bandRow($('bandArmed'), runsR, ['disarmed', 'armed'], (r) => (r.code ? { bg: css('amber'), fg: '#0d1115' } : null), (r) => (r.code ? 'armed' : 'disarmed') + ' · ' + r.t0.toFixed(1) + '–' + r.t1.toFixed(1) + ' s', false);
+    bandRow($('bandArmed'), runsR, ['disarmed', 'armed'], (r) => (r.code ? { bg: css('amber'), fg: INK_DARK } : null), (r) => (r.code ? 'armed' : 'disarmed') + ' · ' + r.t0.toFixed(1) + '–' + r.t1.toFixed(1) + ' s', false);
     // event ticks on the state band
     const ev = $('eventTicks');
     ev.textContent = '';
     state.events.forEach((e) => {
       const m = el('i', e.failed ? 'ev bad' : 'ev');
       m.style.left = (state.dur ? (e.t / state.dur) * 100 : 0) + '%';
-      m.title = e.t.toFixed(1) + ' s · ' + e.kind;
+      m.title = e.t.toFixed(1) + ' s · ' + eventLabel(e.kind);
       ev.appendChild(m);
     });
   }
@@ -516,10 +558,12 @@
     b.hidden = !msg;
     b.textContent = msg || '';
     b.className = 'banner chrome' + (kind ? ' ' + kind : '');
+    b.setAttribute('role', kind === 'bad' ? 'alert' : 'status');
   }
 
   function setRun(bundle) {
     state.store = bundle.store;
+    state.hasRun = true;
     state.result = bundle.result;
     state.manifest = bundle.manifest;
     const res = bundle.result;
@@ -530,13 +574,18 @@
     }));
     state.summary = summarizeResult(res, bundle.manifest, bundle.store);
     state.t = 0; state.playing = false; state.lastEvt = '';
-    showBanner(bundle.store.length ? '' : 'This run has no telemetry samples (empty series).', 'warn');
+    const pr = root.PLVHud ? root.PLVHud.parsePerception(bundle.raw) : { data: null, warning: null };
+    state.per = pr.data;
+    showBanner(bundle.store.length ? (pr.warning || '') : 'This run has no telemetry samples (empty series).', 'warn');
+    syncEmpty();
+    applyCamera();
     if (state.scene) state.scene.setData(bundle.store);
     renderHeader();
     buildBands();
     drawCharts();
     syncPlayButton();
     render();
+    if (state.cine) startCine();
   }
 
   async function loadFromParam(runParam, remember) {
@@ -565,9 +614,19 @@
       items.forEach((it) => { const o = el('option', null, it.label); o.value = it.path; g.appendChild(o); });
       sel.appendChild(g);
     };
-    let samples = [];
-    try { samples = ((await fetchJson('samples/index.json', true)) || {}).samples || []; } catch (e) { /* none */ }
-    add('Sample runs (synthetic)', samples.filter((s) => s && typeof s.path === 'string' && typeof s.label === 'string'));
+    let idx = {};
+    try { idx = (await fetchJson('samples/index.json', true)) || {}; } catch (e) { /* none */ }
+    const ok = (list) => (Array.isArray(list) ? list : []).filter((s) => s && typeof s.path === 'string' && typeof s.label === 'string');
+    add('Sample runs (synthetic)', ok(idx.samples));
+    add('M3 preview (synthetic, proposed v2 data)', ok(idx.previews));
+    const picks = $('emptyPicks');
+    picks.textContent = '';
+    ok(idx.samples).concat(ok(idx.previews)).slice(0, 4).forEach((it) => {
+      const b = el('button', 'btn', it.label.replace(/\s*\(synthetic[^)]*\)\s*$/i, ''));
+      b.type = 'button';
+      b.addEventListener('click', () => { loadFromParam(it.path, true).then(() => fillPickerValue(it.path)); });
+      picks.appendChild(b);
+    });
     // Best effort: directory listing from python's http.server at ../runs/ (git-ignored local runs).
     let runs = [];
     try {
@@ -582,6 +641,10 @@
     const ph = el('option', null, 'Choose a run…');
     ph.value = '';
     sel.insertBefore(ph, sel.firstChild);
+    fillPickerValue(current);
+  }
+  function fillPickerValue(current) {
+    const sel = $('runSelect');
     const norm = (p) => (p || '').replace(/\/?$/, '/');
     const hit = Array.from(sel.options).find((o) => o.value && norm(o.value) === norm(current));
     sel.value = hit ? hit.value : '';
@@ -590,13 +653,23 @@
   /* ---------- transport ---------- */
   function syncPlayButton() {
     const b = $('playBtn');
-    b.textContent = state.playing ? 'Pause' : (state.t >= state.dur - 1e-6 && state.dur > 0.01 ? 'Replay' : 'Play');
-    b.setAttribute('aria-pressed', state.playing ? 'true' : 'false');
+    const playing = state.cine ? !state.cine.paused && state.cine.d && state.cine.d.phase !== 'end' : state.playing;
+    const label = playing ? 'Pause' : (state.t >= state.dur - 1e-6 && state.dur > 0.01 ? 'Replay' : 'Play');
+    $('playLbl').textContent = label;
+    b.dataset.state = label.toLowerCase();
+    b.setAttribute('aria-pressed', playing ? 'true' : 'false');
+    b.disabled = !state.store.length;
     document.querySelectorAll('#speeds button').forEach((x) => x.setAttribute('aria-pressed', String(+x.dataset.speed === state.speed)));
   }
-  function setTime(t) { state.t = Math.min(Math.max(t, 0), state.dur); render(); syncPlayButton(); }
+  function setTime(t) { if (state.cine) stopCine(); state.t = Math.min(Math.max(t, 0), state.dur); render(); syncPlayButton(); }
   function togglePlay() {
     if (!state.store.length) return;
+    if (state.cine) {
+      const k = state.cine;
+      if (k.d && k.d.phase === 'end') startCine(); else k.paused = !k.paused;
+      syncPlayButton();
+      return;
+    }
     if (!state.playing && state.t >= state.dur - 1e-6) state.t = 0;
     state.playing = !state.playing;
     state.last = performance.now();
@@ -616,29 +689,36 @@
     $('scrub').setAttribute('aria-valuetext', T);
     let evt = '';
     for (const e of state.events) if (e.t <= state.t + 1e-9) evt = e.kind;
-    if (evt !== state.lastEvt) { state.lastEvt = evt; $('evtNow').textContent = evt; $('hudEvt').textContent = evt; }
+    if (evt !== state.lastEvt) { state.lastEvt = evt; $('evtNow').textContent = eventLabel(evt); $('hudEvt').textContent = eventLabel(evt); }
     if (!s) { $('hudAlt').textContent = '–'; $('hudVs').textContent = '–'; if (state.scene) state.scene.update(null, 0); return; }
     const st = state.store;
     const lt = st.labelTable();
     const sname = st.hasState ? st.states[s.state] : st.modes[s.mode];
     const tok = stateToken(lt.names[s.code], s.code);
     $('hudAlt').textContent = s.alt.toFixed(2);
-    $('hudVs').textContent = (-s.vz >= 0 ? '+' : '−') + Math.abs(s.vz).toFixed(2);
+    $('hudVs').textContent = fmtSigned(-s.vz, 2);
     const chip = $('hudState');
     chip.textContent = sname || '';
     chip.style.background = tokenColor(tok);
-    chip.style.color = DARK_TEXT_TOKENS.has(tok) ? '#0d1115' : '#fff';
+    chip.style.color = readableOn(tokenColor(tok));
     $('hudFmode').textContent = st.modes[s.mode] || '';
     $('hudArm').textContent = s.armed ? 'ARMED' : 'DISARMED';
     $('hudArm').className = s.armed ? 'armed' : '';
     $('valAlt').textContent = s.alt.toFixed(2) + ' m';
-    $('valVz').textContent = (-s.vz >= 0 ? '+' : '−') + Math.abs(s.vz).toFixed(2) + ' m/s';
+    $('valVz').textContent = fmtSigned(-s.vz, 2) + ' m/s';
     if (state.scene) state.scene.update(s, state.playing ? 1 : 0);
+    presentFrame(s, { label: sname || '', color: tokenColor(tok), fg: readableOn(tokenColor(tok)) });
   }
 
   function tick(now) {
     const dt = Math.min(0.1, (now - state.last) / 1000);
     state.last = now;
+    if (state.cine) {
+      cineStep(dt);
+      if (state.scene) state.scene.frame(dt, state.cine && state.cine.d.phase === 'play' && !state.cine.paused);
+      requestAnimationFrame(tick);
+      return;
+    }
     if (state.playing) {
       state.t += dt * state.speed;
       if (state.t >= state.dur) { state.t = state.dur; state.playing = false; syncPlayButton(); }
@@ -679,333 +759,236 @@
     $('recBtn').setAttribute('aria-pressed', String(on));
     if (state.scene) state.scene.resize();
     drawCharts();
+    layoutViews();
   }
 
-  /* ===================== three.js scene ===================== */
-  // World: x = East, y = Up, z = South (right-handed). North is -z. Altitude above the deck = y.
-  const DRONE_SCALE = 1.5; // drawn larger than a 0.6 m airframe so it reads at distance
-
-  function createScene(container) {
-    if (typeof THREE === 'undefined') throw new Error('three.js did not load (offline?). Charts and timeline still work.');
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    container.appendChild(renderer.domElement);
-    const canvas = renderer.domElement;
-    canvas.style.touchAction = 'none';
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 400);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa0a8, 0.55));
-    const sun = new THREE.DirectionalLight(0xffffff, 0.38);
-    sun.position.set(-6, 12, 8);
-    scene.add(sun);
-
-    const M = (c) => new THREE.MeshLambertMaterial({ color: c });
-    const roofMat = M(0xcccccc), parapetMat = M(0x999999), plinthMat = M(0x888888);
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(14, 0.1, 10), roofMat);
-    roof.position.set(0, -0.95, 0);
-    scene.add(roof);
-    [[0, -5, 14, 0.25], [0, 5, 14, 0.25], [-7, 0, 0.25, 10], [7, 0, 0.25, 10]].forEach((p) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(p[2], 0.4, p[3]), parapetMat);
-      m.position.set(p[0], -0.75, p[1]);
-      scene.add(m);
-    });
-    const plinth = new THREE.Mesh(new THREE.BoxGeometry(2.7, 0.8, 2.7), plinthMat);
-    plinth.position.set(0, -0.5, 0);
-    scene.add(plinth);
-    const slab = new THREE.Mesh(new THREE.BoxGeometry(3, 0.1, 3), M(0x555555));
-    slab.position.set(0, -0.05, 0);
-    scene.add(slab);
-
-    const padCanvas = document.createElement('canvas');
-    padCanvas.width = padCanvas.height = 1536;
-    const padTex = new THREE.CanvasTexture(padCanvas);
-    if (THREE.sRGBEncoding) padTex.encoding = THREE.sRGBEncoding;
-    padTex.anisotropy = 8;
-    const pad = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), new THREE.MeshBasicMaterial({ map: padTex }));
-    pad.rotation.x = -Math.PI / 2;
-    pad.position.y = 0.003;
-    scene.add(pad);
-
-    // Drone: forward is -z (north); heading rotates about y, clockwise from north.
-    const drone = new THREE.Group();
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 0.2), new THREE.MeshLambertMaterial({ color: 0x20262c }));
-    drone.add(body);
-    const armMat = new THREE.MeshLambertMaterial({ color: 0x3a434b });
-    [Math.PI / 4, -Math.PI / 4].forEach((a) => {
-      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.02, 0.03), armMat);
-      arm.rotation.y = a;
-      drone.add(arm);
-    });
-    const rotors = [];
-    const rotorMat = new THREE.MeshBasicMaterial({ color: 0x3fd0ee, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
-    [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach((q) => {
-      const g = new THREE.Group();
-      g.position.set(q[0] * 0.22, 0.04, q[1] * 0.22);
-      const disc = new THREE.Mesh(new THREE.CircleGeometry(0.13, 20), rotorMat);
-      disc.rotation.x = -Math.PI / 2;
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.004, 0.025), new THREE.MeshBasicMaterial({ color: 0xe9f3f6 }));
-      g.add(disc, blade);
-      drone.add(g);
-      rotors.push(blade);
-    });
-    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.12, 8), new THREE.MeshBasicMaterial({ color: 0xffb000 }));
-    nose.rotation.x = -Math.PI / 2;
-    nose.position.set(0, 0, -0.16);
-    drone.add(nose);
-    drone.scale.setScalar(DRONE_SCALE);
-    scene.add(drone);
-
-    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.28 * DRONE_SCALE, 24), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }));
-    shadow.rotation.x = -Math.PI / 2;
-    scene.add(shadow);
-    const dropGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, -1, 0)]);
-    const dropMat = new THREE.LineBasicMaterial({ color: 0x3fd0ee, transparent: true, opacity: 0.55 });
-    const drop = new THREE.Line(dropGeo, dropMat);
-    scene.add(drop);
-
-    // Trail: one cylinder instance per segment, coloured per segment by mission state.
-    let trail = null, pts = [], segMats = [], headIdx = -1, ruler = null;
-    const yAxis = new THREE.Vector3(0, 1, 0);
-    function segMatrix(a, b, out) {
-      const dir = new THREE.Vector3().subVectors(b, a);
-      const len = dir.length();
-      const q = new THREE.Quaternion();
-      if (len > 1e-9) q.setFromUnitVectors(yAxis, dir.divideScalar(len));
-      out.compose(new THREE.Vector3().addVectors(a, b).multiplyScalar(0.5), q, new THREE.Vector3(0.028, Math.max(len, 1e-6), 0.028));
-      return out;
-    }
-
-    const colors = {};
-    function readColors() {
-      ['roof', 'parapet', 'deck', 'deck-sa', 'tlof', 'mark', 'tdpc', 'vblue', 'lit', 'ink-2', 'ink-3', 'sky'].forEach((k) => { colors[k] = css(k); });
-    }
-
-    function drawPad() {
-      const g = padCanvas.getContext('2d');
-      const S = padCanvas.width, ppm = S / 3, cx = S / 2;
-      const m = (v) => v * ppm;
-      g.fillStyle = colors['deck-sa']; g.fillRect(0, 0, S, S);
-      g.fillStyle = colors.deck; g.fillRect(cx - m(1), cx - m(1), m(2), m(2));
-      g.fillStyle = colors.tlof; g.fillRect(cx - m(0.5), cx - m(0.5), m(1), m(1));
-      g.strokeStyle = colors.mark; g.lineWidth = m(0.04);
-      g.setLineDash([m(0.15), m(0.15)]);
-      g.strokeRect(cx - m(0.97), cx - m(0.97), m(1.94), m(1.94));
-      g.setLineDash([]);
-      g.lineWidth = m(0.03);
-      g.strokeRect(cx - m(0.485), cx - m(0.485), m(0.97), m(0.97));
-      g.strokeStyle = colors.tdpc; g.lineWidth = m(0.04);
-      g.beginPath(); g.arc(cx, cx, m(0.27), 0, Math.PI * 2); g.stroke();
-      // Decorative 10x10-module tag (1-module quiet zone, black border, pseudo-random 6x6 payload).
-      // Not a real AprilTag id; the Gazebo world supplies the real tag in M2.
-      const cell = m(0.03), x0 = cx - cell * 5;
-      g.fillStyle = '#ffffff'; g.fillRect(x0, x0, cell * 10, cell * 10);
-      g.fillStyle = '#111111'; g.fillRect(x0 + cell, x0 + cell, cell * 8, cell * 8);
-      let seed = 11;
-      for (let r = 0; r < 6; r++) for (let c = 0; c < 6; c++) {
-        seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-        g.fillStyle = (seed >> 16) & 1 ? '#ffffff' : '#111111';
-        g.fillRect(x0 + cell * (2 + c), x0 + cell * (2 + r), cell, cell);
+  /* ---------- onboard camera, M3 HUD, cinematic mode ---------- */
+  const clampN = (x, a, b) => Math.min(b, Math.max(a, x));
+  function camIntr() {
+    const Hc = root.PLVHud;
+    const pc = state.per && state.per.camera;
+    const w = pres.res ? pres.res[0] : pc ? pc.width : Hc.CAMERA_DEFAULT.width;
+    const h = pres.res ? pres.res[1] : pc ? pc.height : Hc.CAMERA_DEFAULT.height;
+    return Hc.cameraIntrinsics(w, h, pres.hfov || (pc && pc.hfov_deg) || Hc.CAMERA_DEFAULT.hfov_deg);
+  }
+  function applyCamera() {
+    if (!root.PLVHud) return;
+    pres.intr = camIntr();
+    if (state.scene) state.scene.setOnboard({ width: pres.intr.width, height: pres.intr.height, hfov: pres.intr.hfov, mountUp: root.PLVHud.CAMERA_DEFAULT.mount_up_m });
+    if (pres.hud3) pres.hud3.setCamera(pres.intr);
+    if (pres.pipOv) pres.pipOv.setCamera(pres.intr);
+    layoutViews();
+  }
+  /** What is on screen now; cinematic mode overrides the user's view choices. */
+  function effectiveView() {
+    if (state.cine) return { main: 'scene', pip: !!state.cine.pip, hud: false };
+    if (!state.scene || !state.store.length) return { main: 'scene', pip: false, hud: false };
+    return { main: pres.main, pip: pres.pip, hud: pres.hud && pres.main === 'onboard' };
+  }
+  const setHidden = (node, on) => { if (on) node.setAttribute('hidden', ''); else node.removeAttribute('hidden'); }; // works for SVG too
+  const place = (node, r) => { node.style.left = r.x + 'px'; node.style.top = r.y + 'px'; node.style.width = r.w + 'px'; node.style.height = r.h + 'px'; };
+  const roundRect = (r) => ({ x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) });
+  function layoutViews() {
+    const card = $('sceneCard'), W = card.clientWidth, Hh = card.clientHeight;
+    if (!W || !Hh || !root.PLVHud) return;
+    const e = effectiveView(), intr = pres.intr || camIntr();
+    const pip = $('pip'), hud = $('m3hud'), tag = $('onbTag');
+    let inset = null, image = null;
+    const lb = state.cine ? Math.max(0, Math.round((Hh - W / 2.0) / 2)) : 0; // cinematic letterbox to 2:1
+    const below = (state.recMode ? 9 : 0) + lb;
+    if (e.main === 'onboard') {
+      const L = root.PLVHud.hudLayout(W, Hh, intr.aspect);
+      image = roundRect(L.image);
+      place(hud, roundRect(L.frame));
+      setHidden(hud, !e.hud);
+      setHidden(tag, e.hud);
+      tag.style.left = (image.x + 12) + 'px'; tag.style.top = (image.y + 12) + 'px';
+      if (e.pip) {
+        const sc = L.frame.scale, iw = Math.max(150, 300 * sc), ih = (iw * 9) / 16;
+        inset = roundRect({ x: L.frame.x + L.frame.w - iw - 40 * sc, y: L.frame.y + (e.hud ? 214 * sc : 14), w: iw, h: ih });
       }
-      // V ident and approach bar to the south
-      g.fillStyle = colors.vblue; g.beginPath(); g.arc(cx, cx + m(0.38), m(0.1), 0, Math.PI * 2); g.fill();
-      g.strokeStyle = colors.mark; g.lineWidth = m(0.022); g.lineJoin = 'miter';
-      g.beginPath(); g.moveTo(cx - m(0.055), cx + m(0.335)); g.lineTo(cx, cx + m(0.435)); g.lineTo(cx + m(0.055), cx + m(0.335)); g.stroke();
-      g.fillStyle = colors.mark; g.fillRect(cx - m(0.125), cx + m(0.44), m(0.25), m(0.03));
-      // perimeter lights: 16 around the TLOF, 8 around the FATO
-      const light = (x, y) => {
-        const gr = g.createRadialGradient(x, y, 0, x, y, m(0.07));
-        gr.addColorStop(0, 'rgba(125,255,174,0.95)'); gr.addColorStop(0.4, 'rgba(47,209,107,0.55)'); gr.addColorStop(1, 'rgba(47,209,107,0)');
-        g.fillStyle = gr; g.beginPath(); g.arc(x, y, m(0.07), 0, Math.PI * 2); g.fill();
-        g.fillStyle = '#c9ffe0'; g.beginPath(); g.arc(x, y, m(0.016), 0, Math.PI * 2); g.fill();
-      };
-      const ring = (half, n) => {
-        for (let k = 0; k < n; k++) {
-          const s = (k / n) * 8 * half; // along the square perimeter
-          const side = Math.floor(s / (2 * half)), u = s - side * 2 * half - half;
-          const p = [[u, -half], [half, u], [-u, half], [-half, -u]][side];
-          light(cx + m(p[0]), cx + m(p[1]));
-        }
-      };
-      ring(0.55, 16);
-      ring(1.07, 8);
-      padTex.needsUpdate = true;
-    }
-
-    function textSprite(text) {
-      const c = document.createElement('canvas');
-      c.width = 128; c.height = 48;
-      const g = c.getContext('2d');
-      g.font = '600 34px ' + (getComputedStyle(document.body).getPropertyValue('--mono') || 'monospace');
-      g.fillStyle = colors['ink-2']; g.textBaseline = 'middle'; g.textAlign = 'left';
-      g.fillText(text, 6, 26);
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
-      sp.scale.set(1.0, 0.375, 1);
-      sp.center.set(0, 0.5);
-      return sp;
-    }
-
-    function buildRuler(maxAlt) {
-      if (ruler) { scene.remove(ruler); ruler.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } }); }
-      ruler = new THREE.Group();
-      const top = Math.max(2, Math.ceil(maxAlt + 1));
-      const v = [0, 0, 0, 0, top, 0];
-      for (let a = 1; a <= top; a++) { const L = a % 5 === 0 ? 0.28 : 0.14; v.push(0, a, 0, L, a, 0); }
-      const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(v, 3));
-      ruler.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({ color: new THREE.Color(colors['ink-3']) })));
-      const every = top > 12 ? 5 : 2;
-      for (let a = every; a <= top; a += every) { const s = textSprite(a + ' m'); s.position.set(0.32, a, 0); ruler.add(s); }
-      ruler.position.set(-1.9, 0, 1.9);
-      scene.add(ruler);
-    }
-
-    function refreshTheme() {
-      readColors();
-      roofMat.color.set(colors.roof); parapetMat.color.set(colors.parapet); plinthMat.color.set(colors.parapet);
-      scene.background = new THREE.Color(colors.sky);
-      drawPad();
-      if (state.store.length) { buildRuler(maxAltOf(state.store)); recolorTrail(); } else buildRuler(6);
-      dirty = true;
-    }
-    const maxAltOf = (st) => st.cols.alt.reduce((a, b) => Math.max(a, b), 0);
-
-    function recolorTrail() {
-      if (!trail) return;
-      const lt = state.store.labelTable();
-      const c = new THREE.Color();
-      pts.forEach((p, i) => { c.set(tokenColor(stateToken(lt.names[p.code], p.code))); trail.setColorAt(i, c); });
-      if (trail.instanceColor) trail.instanceColor.needsUpdate = true;
-    }
-
-    const toWorld = (s, out) => out.set(s.e - state.store.pad.e, -s.d, -(s.n - state.store.pad.n));
-
-    function setData(st) {
-      if (trail) { scene.remove(trail); trail.geometry.dispose(); trail.material.dispose(); trail = null; }
-      pts = []; segMats = []; headIdx = -1;
-      const stride = Math.max(1, Math.ceil(st.length / 3000));
-      let lastP = null;
-      for (let i = 0; i < st.length; i += stride) {
-        const p = new THREE.Vector3(st.cols.e[i] - st.pad.e, -st.cols.d[i], -(st.cols.n[i] - st.pad.n));
-        const tt = st.cols.t[i];
-        if (lastP && p.distanceTo(lastP.p) < 0.02 && tt - lastP.t < 0.25 && st.cols.state[i] === st.cols.state[lastP.i]) continue;
-        const rec = { p, t: tt, i, code: st.hasState ? st.cols.state[i] : st.cols.mode[i] };
-        pts.push(rec); lastP = rec;
+    } else {
+      setHidden(hud, true); setHidden(tag, true);
+      if (e.pip) {
+        const iw = clampN(W * 0.25, 150, 360), ih = iw / intr.aspect;
+        inset = roundRect({ x: W - iw - 14, y: Hh - ih - 14 - below, w: iw, h: ih });
       }
-      if (pts.length) {
-        trail = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 6, 1, true), new THREE.MeshBasicMaterial(), pts.length);
-        trail.frustumCulled = false;
-        for (let i = 0; i < pts.length; i++) {
-          const m = new THREE.Matrix4();
-          segMatrix(pts[i].p, pts[Math.min(i + 1, pts.length - 1)].p, m);
-          segMats.push(m); trail.setMatrixAt(i, m);
-        }
-        scene.add(trail);
-        recolorTrail();
-        trail.count = 0;
-      }
-      buildRuler(maxAltOf(st));
-      const f = st.length ? st.sampleAt(0) : null;
-      if (f) { orbit.target.set(0, Math.max(2.2, maxAltOf(st) * 0.5), 0); orbit.dist = Math.max(10, maxAltOf(st) * 1.7 + 5.5); }
-      dirty = true;
     }
+    pip.hidden = !inset;
+    if (inset) {
+      place(pip, inset);
+      const sceneIn = e.main === 'onboard';
+      pip.classList.toggle('scene-in', sceneIn);
+      $('pipLabel').textContent = sceneIn ? 'SCENE · ' + String(state.scene ? state.scene.camera : sceneOpts.cam).toUpperCase() : 'ONBOARD ↓';
+      $('pipSub').textContent = sceneIn ? '' : 'SIMULATED PREVIEW';
+      $('pipSvg').style.display = sceneIn ? 'none' : '';
+      $('pipSwap').hidden = !!state.cine;
+    }
+    card.classList.toggle('onb-main', e.main === 'onboard');
+    card.classList.toggle('m3', e.hud);
+    card.classList.toggle('cine-on', !!state.cine);
+    if (pres.cineOv) pres.cineOv.setBars(lb);
+    if (state.scene) state.scene.setViews({ main: e.main, inset, image });
+    syncViewButtons();
+    render();
+  }
+  function syncViewButtons() {
+    const e = effectiveView(); // the buttons show what is on screen (cinematic mode overrides the choices)
+    $('pipBtn').setAttribute('aria-pressed', String(e.pip));
+    $('swapBtn').setAttribute('aria-pressed', String(e.main === 'onboard'));
+    $('hudBtn').setAttribute('aria-pressed', String(e.hud));
+    $('cineBtn').setAttribute('aria-pressed', String(!!state.cine));
+  }
+  /** View controls need the 3D scene and a run. */
+  const canPresent = () => !!state.scene && state.store.length > 0;
+  function syncEmpty() {
+    const empty = !state.store.length;
+    $('sceneCard').classList.toggle('norun', empty);
+    $('emptyState').hidden = state.hasRun;
+    ['pipBtn', 'swapBtn', 'hudBtn', 'cineBtn'].forEach((id) => { $(id).disabled = !canPresent(); });
+  }
+  function setPip(on) { if (!canPresent()) return; if (state.cine) stopCine(); pres.pip = on; layoutViews(); }
+  function swapViews() {
+    if (!canPresent()) return;
+    if (state.cine) stopCine();
+    pres.main = pres.main === 'onboard' ? 'scene' : 'onboard';
+    if (pres.main === 'scene' && !pres.pip) pres.pip = true;
+    layoutViews();
+  }
+  function toggleHud() {
+    if (!canPresent()) return;
+    if (state.cine) stopCine();
+    if (pres.main !== 'onboard') { pres.main = 'onboard'; pres.hud = true; } else pres.hud = !pres.hud;
+    layoutViews();
+  }
 
-    // ---- camera orbit: drag to rotate, wheel / pinch to zoom ----
-    const orbit = { az: 0.6, pol: 1.12, dist: 13, target: new THREE.Vector3(0, 2.5, 0) };
-    const home = { az: 0.6, pol: 1.12 };
-    function placeCamera() {
-      const sp = Math.sin(orbit.pol);
-      camera.position.set(orbit.target.x + orbit.dist * sp * Math.sin(orbit.az), orbit.target.y + orbit.dist * Math.cos(orbit.pol), orbit.target.z + orbit.dist * sp * Math.cos(orbit.az));
-      camera.lookAt(orbit.target);
-    }
-    const pointers = new Map();
-    let moved = 0, dirty = true, pinch0 = 0;
-    canvas.addEventListener('pointerdown', (ev) => { canvas.setPointerCapture(ev.pointerId); pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY }); moved = 0; pinch0 = 0; });
-    canvas.addEventListener('pointermove', (ev) => {
-      const p = pointers.get(ev.pointerId);
-      if (!p) return;
-      const dx = ev.clientX - p.x, dy = ev.clientY - p.y;
-      p.x = ev.clientX; p.y = ev.clientY;
-      moved += Math.abs(dx) + Math.abs(dy);
-      if (pointers.size === 1) {
-        orbit.az -= dx * 0.007;
-        orbit.pol = Math.min(1.5, Math.max(0.12, orbit.pol - dy * 0.007));
-      } else if (pointers.size === 2) {
-        const [a, b] = Array.from(pointers.values());
-        const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (pinch0) orbit.dist = Math.min(60, Math.max(2.5, orbit.dist * (pinch0 / d)));
-        pinch0 = d;
-      }
-      dirty = true;
+  /** Per-frame overlay update: M3 HUD, PiP marks, cinematic telemetry chip. */
+  function presentFrame(s, chip) {
+    const Hc = root.PLVHud;
+    if (!Hc || !pres.intr) return;
+    const e = effectiveView();
+    const needHud = e.hud && pres.hud3, needPip = e.pip && e.main === 'scene' && pres.pipOv;
+    if (state.cine && pres.cineOv && state.cine.d) pres.cineOv.update(state.cine.d, { label: chip.label.toUpperCase(), color: chip.color, fg: chip.fg, alt: 'ALT ' + s.alt.toFixed(1) + ' m' });
+    if (!needHud && !needPip) return;
+    const st = state.store, pad = { n: st.pad.n, e: st.pad.e, d: 0 };
+    const res = state.result;
+    const m = Hc.hudModel({
+      sample: s, store: st, per: state.per, result: res, verdict: state.summary.verdict,
+      failure: res && res.failure_reason && typeof res.failure_reason === 'object' ? res.failure_reason.code : null,
+      mode: state.summary.mode, t: state.t, intr: pres.intr, pad,
+      padYawDeg: state.city ? state.city.vertiport.pad.yaw_deg : 0, tagSize: Hc.TAG_BLACK_M, mountUp: Hc.CAMERA_DEFAULT.mount_up_m,
     });
-    const up = (ev) => {
-      pointers.delete(ev.pointerId);
-      pinch0 = 0;
-      if (ev.type === 'pointerup' && pointers.size === 0 && moved < 5 && api.onTap) api.onTap();
+    if (needHud) {
+      const tr = state.per && state.per.truth;
+      const pos = tr ? (tt) => Hc.interpAt(tr, ['n', 'e'], tt) : (tt) => st.sampleAt(tt);
+      pres.hud3.update(m, { t: state.t, runId: $('runId').textContent, hist: Hc.offsetHistory(pos, pad, state.t, 10, 0.2) });
+    }
+    if (needPip) pres.pipOv.update(m);
+  }
+
+  function cineContent() {
+    const sum = state.summary, res = state.result || {}, st = state.store, man = state.manifest || {};
+    const runId = $('runId').textContent;
+    const scen = (res.scenario && res.scenario.name) || (man.scenario && man.scenario.name) || '';
+    const synthetic = !!(st.source && st.source.kind === 'synthetic');
+    const vtxt = sum.verdict === 'pass' ? 'PASS' : sum.verdict === 'fail' ? 'FAIL' : 'NO RESULT';
+    const tone = sum.verdict === 'pass' ? '#2fd16b' : sum.verdict === 'fail' ? '#cf3a2c' : '#77818b';
+    const fr = res.failure_reason && typeof res.failure_reason === 'object' ? String(res.failure_reason.code) : '';
+    const metrics = [];
+    if (isNum(res.horizontal_error_m)) metrics.push('error ' + (res.horizontal_error_m * 100).toFixed(1) + ' cm');
+    if (isNum(res.touchdown_speed_mps)) metrics.push('touchdown ' + res.touchdown_speed_mps.toFixed(2) + ' m/s');
+    if (isNum(res.time_to_land_s)) metrics.push('land in ' + res.time_to_land_s.toFixed(1) + ' s');
+    if (!metrics.length) sum.rows.filter((r) => r.derived).forEach((r) => metrics.push(r.k.toLowerCase() + ' ' + r.v + ' *'));
+    const rows = sum.rows.filter((r) => !/^(Detail|Tlog records)$/.test(r.k)).slice(0, 8).map((r) => ({ k: r.k + (r.derived ? ' *' : ''), v: r.v }));
+    return {
+      title: { ey: 'PRECISION LANDING LAB', tt: 'Rooftop vertiport landing', sb: 'Simulation · procedural city, not a real place' },
+      run: { ey: 'RUN', tt: runId, sb: [scen, sum.mode ? 'mode ' + sum.mode : '', isNum(res.seed) ? 'seed ' + res.seed : '', synthetic ? 'synthetic data' : ''].filter(Boolean).join(' · ') },
+      result: { ey: 'RESULT · REPORTED BY THE RUNNER', tt: vtxt + (fr ? ' · ' + fr.replace(/_/g, ' ') : ''), sb: metrics.join(' · '), tone },
+      outro: {
+        ey: 'PRECISION LANDING LAB · REPLAY', tt: runId, verdict: vtxt + (fr ? ' · ' + fr.replace(/_/g, ' ').toUpperCase() : ''), tone, rows,
+        foot: 'Simulation only.' + (synthetic ? ' Synthetic sample data.' : '') + ' PASS/FAIL is the runner\'s reported outcome, not an acceptance decision.' + (rows.some((r) => / \*$/.test(r.k)) ? ' * derived from telemetry.' : ''),
+      },
     };
-    canvas.addEventListener('pointerup', up);
-    canvas.addEventListener('pointercancel', up);
-    canvas.addEventListener('wheel', (ev) => { ev.preventDefault(); orbit.dist = Math.min(60, Math.max(2.5, orbit.dist * Math.exp(ev.deltaY * 0.001))); dirty = true; }, { passive: false });
-
-    function resize() {
-      const w = container.clientWidth, h = container.clientHeight;
-      if (!w || !h) return;
-      renderer.setSize(w, h, false);
-      canvas.style.width = '100%'; canvas.style.height = '100%';
-      camera.aspect = w / h;
-      // keep the pad framed on tall/narrow viewports
-      camera.fov = camera.aspect < 1.1 ? 52 : 40;
-      camera.updateProjectionMatrix();
-      dirty = true;
-    }
-    new ResizeObserver(resize).observe(container);
-
-    const tmp = new THREE.Vector3();
-    let spin = 0, curArmed = 0, curAlt = 0, hasSample = false;
-    function update(s) {
-      hasSample = !!s;
-      if (!s) { drone.visible = shadow.visible = drop.visible = false; if (trail) trail.count = 0; dirty = true; return; }
-      drone.visible = shadow.visible = drop.visible = true;
-      toWorld(s, tmp);
-      drone.position.copy(tmp).y += 0.05 * DRONE_SCALE;
-      drone.rotation.y = -(s.hdg * Math.PI) / 180;
-      curArmed = s.armed; curAlt = s.alt;
-      const onPad = Math.abs(tmp.x) < 1.6 && Math.abs(tmp.z) < 1.6;
-      const gy = onPad ? 0.006 : -0.89;
-      shadow.position.set(tmp.x, gy, tmp.z);
-      const k = Math.max(0.35, 1 - (tmp.y - gy) * 0.06);
-      shadow.scale.setScalar(k); shadow.material.opacity = 0.32 * k;
-      drop.position.set(tmp.x, tmp.y, tmp.z);
-      drop.scale.set(1, Math.max(0.001, tmp.y - gy), 1);
-      // trail up to t, with a live head segment ending at the drone
-      if (trail) {
-        let lo = 0, hi = pts.length - 1, k2 = -1;
-        while (lo <= hi) { const mid = (lo + hi) >> 1; if (pts[mid].t <= s.t) { k2 = mid; lo = mid + 1; } else hi = mid - 1; }
-        if (headIdx >= 0 && headIdx < segMats.length) trail.setMatrixAt(headIdx, segMats[headIdx]);
-        headIdx = -1;
-        if (k2 >= 0) {
-          const hm = new THREE.Matrix4();
-          segMatrix(pts[k2].p, tmp, hm);
-          trail.setMatrixAt(k2, hm);
-          headIdx = k2;
-        }
-        trail.count = k2 + 1;
-        trail.instanceMatrix.needsUpdate = true;
-      }
-      if (state.follow) orbit.target.lerp(tmp, 0.18);
-      dirty = true;
-    }
-    function frame(dt, playing) {
-      if (playing && hasSample && curArmed) { spin += dt * 60; rotors.forEach((r, i) => { r.rotation.y = spin * (i % 2 ? 1 : -1); }); dirty = true; }
-      if (dirty) { dirty = false; placeCamera(); renderer.render(scene, camera); }
-    }
-    function resetView() { orbit.az = home.az; orbit.pol = home.pol; orbit.dist = Math.max(10, maxAltOf(state.store) * 1.7 + 5.5); orbit.target.set(0, Math.max(2.2, maxAltOf(state.store) * 0.5), 0); state.follow = false; dirty = true; }
-
-    const api = { setData, update, frame, resize, refreshTheme, resetView, onTap: null };
-    readColors();
-    refreshTheme();
-    resize();
-    return api;
   }
+  function startCine() {
+    if (!canPresent() || !root.PLVCine || !pres.cineOv) return;
+    const st = state.store, lt = st.labelTable();
+    const plan = root.PLVCine.planCine({ dur: state.dur, speed: state.speed, runs: runLengths(st.cols.t, lt.codes, state.dur), names: lt.names });
+    state.cine = { plan, c: 0, cam: null, paused: false, snap: true, pip: false, d: root.PLVCine.cineAt(plan, 0) };
+    state.playing = false; state.t = 0;
+    pres.cineOv.setContent(cineContent());
+    $('cine').hidden = false;
+    if (state.scene) state.scene.setCine(true);
+    layoutViews();
+    syncPlayButton();
+  }
+  function stopCine() {
+    if (!state.cine) return;
+    state.cine = null;
+    $('cine').hidden = true;
+    if (state.scene) { state.scene.setCine(false); state.scene.setCamera(sceneOpts.cam); }
+    layoutViews();
+    syncViewbar();
+    syncPlayButton();
+  }
+  function cineStep(dt) {
+    const k = state.cine;
+    if (!k.paused) k.c += dt;
+    const d = root.PLVCine.cineAt(k.plan, k.c);
+    const wasEnd = k.d && k.d.phase === 'end';
+    k.d = d;
+    if (d.cam !== k.cam) {
+      if (state.scene) state.scene.setCamera(d.cam, k.snap || d.blend === 0, d.blend || undefined);
+      k.cam = d.cam; k.snap = false;
+      if (!$('pip').hidden) layoutViews();
+      syncViewbar();
+    }
+    if (d.pip !== k.pip) { k.pip = d.pip; layoutViews(); }
+    if ((d.phase === 'end') !== wasEnd) syncPlayButton();
+    state.t = d.t;
+    render();
+  }
+
+  /* ===================== three.js scene (built in world.js) ===================== */
+  // World: x = East, y = Up, z = South (right-handed). North is -z. Altitude above the deck = y.
+  const sceneOpts = { cam: 'chase', tod: 'day', q: 'high', wind: null };
+  const CAMS = ['chase', 'orbit', 'top', 'city', 'pad'], TODS = ['day', 'golden', 'dusk'];
+
+  function createScene(container, city) {
+    if (typeof THREE === 'undefined' || !root.PLVWorld) throw new Error('three.js did not load. Make sure that the network is available. The charts and the timeline continue to work.');
+    return root.PLVWorld.createWorld({
+      container, city, cam: sceneOpts.cam, tod: sceneOpts.tod, quality: sceneOpts.q,
+      mono: css('mono') || 'monospace',
+      follow: () => state.follow,
+      wind: () => sceneOpts.wind || city.vertiport.wind,
+      trailColor: (code) => { const lt = state.store.labelTable(); return tokenColor(stateToken(lt.names[code], code)); },
+    });
+  }
+
+  async function loadCity() {
+    const W = root.PLVWorldCore;
+    if (!W) throw new Error('world-core.js did not load');
+    const raw = await fetchJson('scene/city.json', false);
+    return W.parseCity(raw);
+  }
+
+  function syncViewbar() {
+    const sc = state.scene;
+    const mark = (sel, attr, val) => document.querySelectorAll(sel).forEach((x) => x.setAttribute('aria-pressed', String(x.dataset[attr] === val)));
+    mark('#camSeg button', 'cam', sc ? sc.camera : sceneOpts.cam);
+    mark('#todSeg button', 'tod', sc ? sc.timeOfDay : sceneOpts.tod);
+    mark('#qSeg button', 'q', sc ? sc.quality : sceneOpts.q);
+    $('followBtn').hidden = (sc ? sc.camera : sceneOpts.cam) !== 'orbit';
+  }
+  function setCam(c) { if (state.cine) stopCine(); sceneOpts.cam = c; if (state.scene) state.scene.setCamera(c); syncViewbar(); if (pres.main === 'onboard') layoutViews(); }
+  function setTod(t) { sceneOpts.tod = t; if (state.scene) state.scene.setTimeOfDay(t); syncViewbar(); }
+  function setQuality(q) {
+    sceneOpts.q = q;
+    try { localStorage.setItem('plv-quality', q); } catch (e) { /* storage unavailable */ }
+    if (state.scene) state.scene.setQuality(q);
+    syncViewbar();
+  }
+  const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
 
   /* ---------- boot ---------- */
   function boot() {
@@ -1013,31 +996,87 @@
     document.documentElement.style.setProperty('--rgutter', RGUTTER + 'px');
     const params = new URLSearchParams(location.search);
     let theme = params.get('theme');
-    if (theme !== 'light' && theme !== 'dark') { try { theme = localStorage.getItem('plv-theme'); } catch (e) { theme = null; } }
+    if (theme !== 'light' && theme !== 'dark') { try { theme = localStorage.getItem(THEME_KEY) || localStorage.getItem('plv-theme'); } catch (e) { theme = null; } }
     if (theme === 'light' || theme === 'dark') document.documentElement.setAttribute('data-theme', theme);
 
-    try {
-      state.scene = createScene($('scene'));
-      state.scene.onTap = () => { if (state.recMode) togglePlay(); };
-    } catch (e) {
-      $('scene').appendChild(el('div', 'noscene', '3D view unavailable: ' + e.message));
+    // scene options: URL (cam, tod, q, wind) > stored quality > device default
+    const W = root.PLVWorldCore;
+    const sp0 = W ? W.sceneParams(location.search) : {};
+    let storedQ = null;
+    try { storedQ = localStorage.getItem('plv-quality'); } catch (e) { storedQ = null; }
+    const touch = (navigator.maxTouchPoints || 0) > 1 || /iPad|iPhone|Android/.test(navigator.userAgent);
+    sceneOpts.q = sp0.q || (storedQ === 'low' || storedQ === 'high' ? storedQ : (touch ? 'low' : 'high'));
+    if (sp0.cam) sceneOpts.cam = sp0.cam;
+    if (sp0.tod) sceneOpts.tod = sp0.tod;
+    if (sp0.wind) sceneOpts.wind = sp0.wind;
+    // onboard camera + presentation: pip=0|1, view=onboard, hud=0|1, cfov=<deg>, cres=<w>x<h>
+    pres.pip = params.has('pip') ? params.get('pip') !== '0' : window.innerWidth >= 640;
+    if (params.get('view') === 'onboard') pres.main = 'onboard';
+    if (params.get('hud') === '0') pres.hud = false;
+    const cfov = parseFloat(params.get('cfov'));
+    if (isNum(cfov) && cfov >= 10 && cfov <= 150) pres.hfov = cfov;
+    const cres = /^(\d{2,4})x(\d{2,4})$/.exec(params.get('cres') || '');
+    if (cres) pres.res = [+cres[1], +cres[2]];
+    if (root.PLVPresent) {
+      pres.hud3 = root.PLVPresent.createM3Hud($('m3hud'));
+      pres.pipOv = root.PLVPresent.createPipOverlay($('pipSvg'));
+      pres.cineOv = root.PLVPresent.createCineOverlay($('cine'));
     }
+    applyCamera();
+    const sceneReady = (async () => {
+      try {
+        const city = await loadCity();
+        state.city = city;
+        state.scene = createScene($('scene'), city);
+        if (state.store.length) state.scene.setData(state.store);
+        applyCamera();
+        state.scene.onTap = () => { if (state.recMode) togglePlay(); };
+        if (state.store.length) state.scene.setData(state.store);
+        render();
+      } catch (e) {
+        $('scene').appendChild(el('div', 'noscene', 'The 3D view is not available. ' + e.message));
+        $('sceneCard').classList.add('no3d');
+        document.querySelectorAll('#camSeg button, #todSeg button, #qSeg button, #resetBtn, #followBtn').forEach((b) => { b.disabled = true; });
+      }
+      $('sceneLoading').hidden = true;
+      syncEmpty();
+      syncViewbar();
+    })();
+    root.PLVDebug = {
+      stats: () => (state.scene ? state.scene.stats() : null),
+      // jump the cinematic clock (seconds) and pause it, for deterministic captures
+      cineSeek: (c) => { if (!state.cine) startCine(); if (state.cine) { state.cine.c = c; state.cine.paused = true; state.cine.snap = true; state.cine.cam = null; } },
+    };
 
     $('themeBtn').addEventListener('click', () => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark'));
     $('recBtn').addEventListener('click', () => setRecMode(!state.recMode));
     $('recExit').addEventListener('click', () => setRecMode(false));
     $('playBtn').addEventListener('click', togglePlay);
     $('followBtn').addEventListener('click', () => { state.follow = !state.follow; $('followBtn').setAttribute('aria-pressed', String(state.follow)); });
-    $('resetBtn').addEventListener('click', () => { if (state.scene) state.scene.resetView(); $('followBtn').setAttribute('aria-pressed', 'false'); });
+    $('resetBtn').addEventListener('click', () => { state.follow = false; if (state.scene) state.scene.resetView(); $('followBtn').setAttribute('aria-pressed', 'false'); });
+    document.querySelectorAll('#camSeg button').forEach((b) => b.addEventListener('click', () => setCam(b.dataset.cam)));
+    document.querySelectorAll('#todSeg button').forEach((b) => b.addEventListener('click', () => setTod(b.dataset.tod)));
+    document.querySelectorAll('#qSeg button').forEach((b) => b.addEventListener('click', () => setQuality(b.dataset.q)));
+    $('pipBtn').addEventListener('click', () => setPip(!pres.pip));
+    $('swapBtn').addEventListener('click', swapViews);
+    $('hudBtn').addEventListener('click', toggleHud);
+    $('cineBtn').addEventListener('click', () => (state.cine ? stopCine() : startCine()));
+    $('pip').addEventListener('click', () => { if (!state.cine) swapViews(); });
+    new ResizeObserver(() => layoutViews()).observe($('sceneCard'));
+    syncViewbar();
     document.querySelectorAll('#speeds button').forEach((b) => b.addEventListener('click', () => setSpeed(+b.dataset.speed)));
     $('runSelect').addEventListener('change', (ev) => { if (ev.target.value) loadFromParam(ev.target.value, true); });
+    $('fileBtn').addEventListener('click', () => $('fileInput').click());
     $('fileInput').addEventListener('change', (ev) => { if (ev.target.files.length) loadFromFiles(ev.target.files); ev.target.value = ''; });
     window.addEventListener('dragover', (ev) => ev.preventDefault());
     window.addEventListener('drop', (ev) => { ev.preventDefault(); if (ev.dataTransfer && ev.dataTransfer.files.length) loadFromFiles(ev.dataTransfer.files); });
     window.addEventListener('keydown', (ev) => {
       if (ev.target && /^(INPUT|SELECT|TEXTAREA)$/.test(ev.target.tagName)) return;
       if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
-      if (ev.key === ' ') { togglePlay(); ev.preventDefault(); }
+      const onControl = !!(ev.target && ev.target.closest && ev.target.closest('button, a[href], summary, label'));
+      if (ev.key === ' ') { if (onControl) return; togglePlay(); ev.preventDefault(); }
+      else if (ev.key === 'Enter' && onControl) return;
+      else if (ev.key === '?') toggleHelp();
       else if (ev.key === 'r' || ev.key === 'R') setRecMode(!state.recMode);
       else if (ev.key === 'Escape' && state.recMode) setRecMode(false);
       else if (ev.key === 't' || ev.key === 'T') applyTheme(currentTheme() === 'dark' ? 'light' : 'dark');
@@ -1046,6 +1085,13 @@
       else if (ev.key === 'ArrowLeft' && ev.target === document.body) setTime(state.t - (ev.shiftKey ? 5 : 0.5));
       else if (ev.key === 'ArrowRight' && ev.target === document.body) setTime(state.t + (ev.shiftKey ? 5 : 0.5));
       else if (ev.key >= '1' && ev.key <= '4') setSpeed(SPEEDS[+ev.key - 1]);
+      else if (ev.key === 'c' || ev.key === 'C') setCam(cycle(CAMS, state.scene ? state.scene.camera : sceneOpts.cam));
+      else if (ev.key === 'l' || ev.key === 'L') setTod(cycle(TODS, state.scene ? state.scene.timeOfDay : sceneOpts.tod));
+      else if (ev.key === 'q' || ev.key === 'Q') setQuality((state.scene ? state.scene.quality : sceneOpts.q) === 'high' ? 'low' : 'high');
+      else if (ev.key === 'o' || ev.key === 'O') setPip(!pres.pip);
+      else if (ev.key === 'v' || ev.key === 'V') swapViews();
+      else if (ev.key === 'h' || ev.key === 'H') toggleHud();
+      else if (ev.key === 'k' || ev.key === 'K') { if (state.cine) stopCine(); else startCine(); }
     });
     new ResizeObserver(() => { drawCharts(); }).observe($('panel'));
     wireScrub();
@@ -1058,10 +1104,13 @@
     fillPicker(run);
     const start = async () => {
       if (run) await loadFromParam(run, false);
+      await sceneReady;
       const t0 = parseFloat(params.get('t'));
       if (isNum(t0)) setTime(t0);
-      if (params.get('autoplay') === '1') togglePlay();
       if (params.get('rec') === '1') setRecMode(true);
+      if (root.PLVCine && root.PLVCine.cineParams(location.search).cine) startCine();
+      else if (params.get('autoplay') === '1') togglePlay();
+      layoutViews();
       document.documentElement.setAttribute('data-ready', '1');
     };
     state.last = performance.now();
@@ -1074,7 +1123,13 @@
     $('runId').textContent = 'No run loaded';
     state.summary = { verdict: 'unknown', mode: null, rows: [] };
     $('pills').textContent = '';
-    showBanner('Pick a sample run above, add ?run=<directory> to the URL, or load viewer.json (plus result.json and manifest.json) from disk.', 'info');
+    showBanner('');
+    syncEmpty();
+  }
+  function toggleHelp() {
+    const d = $('help');
+    d.open = !d.open;
+    if (d.open && d.scrollIntoView) d.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   }
 
   boot();

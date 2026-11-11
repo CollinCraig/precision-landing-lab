@@ -2,6 +2,9 @@
 
 Status: **planning** · Owner: Collin Craig · Started 2026-11-10
 
+> **Charter v2 (D-042):** scope and sequence now follow `docs/plan/landing-lab-plan-v2.md`.
+> Where this file and the plan disagree on scope or order, the plan wins. Roles, power, approval and publication rules below stay in force.
+
 ## Purpose
 
 A simulation-only lab where one aircraft finds a **vertiport** landing pad,
@@ -17,7 +20,7 @@ rigor — measured results, safe aborts, honest limitations — shown well.
 
 | Role | Who | Responsibilities |
 |---|---|---|
-| Owner / learner | Collin | Approves milestone briefs and demos, writes the "your piece" exercises, approves all installs, system changes and publication. ~3–5 h/week, flexible. |
+| Owner / learner | Collin | Approves milestone briefs and demos, writes the "your piece" exercises, approves all installs, system changes and publication. Works when available; time varies a lot (D-037). |
 | Planning & acceptance | Claude Opus | Architecture, milestone briefs, visual/demo acceptance, plan upkeep. |
 | Execution | Codex Sol | Coordination, Python, simulation plumbing, Rust validator, tests. |
 | Routine UI/reports | Claude Sonnet | Report generator, demo pages, plots. |
@@ -68,7 +71,7 @@ Non-goals (for now):
 ## Hard constraints
 
 - **Host:** Omarchy laptop is the primary, always-on machine. MacBook/iPad are
-  remote clients via T3 Connect. StarkPC is optional compute only.
+  remote clients via T3 Connect. optional desktop PC is optional compute only.
 - **Power:** heavy simulation runs lid-shut **only on wall power**; on battery
   only light work (code, tests, planning).
 - **Approvals required** before any install, system/network/security/credential/

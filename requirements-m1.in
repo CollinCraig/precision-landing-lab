@@ -1,0 +1,3 @@
+# Direct dependencies for the M1 MAVProxy session (inside the landing-lab container).
+# Regenerate the lock with the command in the header of requirements-m1.lock.
+MAVProxy==1.8.75

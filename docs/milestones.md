@@ -2,8 +2,8 @@
 
 Each milestone: **brief approved by Collin → agents build + review → Collin's
 pieces → <30 min demo with video → Collin accepts or sends back.**
-Timeboxes are wall-clock with Collin at 3–5 h/week; hitting a timebox means
-stop and re-scope together, not push harder.
+Durations are rough guides, not deadlines. Collin works when he is available;
+that time varies a lot. Agent work never waits on a fixed weekly schedule.
 
 ## M0 — Inventory & proposals (≈1 week · read-only)
 
@@ -66,6 +66,7 @@ Accept when: full pre-publish checklist passes and Collin approves.
 Candidates, each becomes its own milestone only by a new decision:
 VTOL aircraft (ArduPilot QuadPlane), simulated ADS-B traffic and avoidance,
 multi-aircraft vertiport sequencing, replayed real traffic data, learned perception.
+Real hardware (owner open to it, budget-conscious, paced with school): owned now: a DJI Mini 2 (manual flight; candidate real-image dataset), a Pitsco Echo Drone (block/JS only) and a webcam. A later candidate is a small ArduPilot/PX4-capable quad with a companion computer, downward camera, rangefinder and optical flow for real precision landing. Research options and costs only after M3, with council input.
 
 ---
 
@@ -104,7 +105,7 @@ multi-aircraft vertiport sequencing, replayed real traffic data, learned percept
 | Risk | Mitigation |
 |---|---|
 | ArduPilot/Gazebo/plugin version mismatch | Pin in M0; container rebuildable. |
-| CPU camera rendering too slow | Lower resolution/rate; GPU diagnosis; StarkPC as optional fallback. |
+| CPU camera rendering too slow | Lower resolution/rate; GPU diagnosis; optional desktop PC as optional fallback. |
 | Laptop sleeps or overheats lid-shut | M0 proposal + acceptance tests 1–5; wall power only. |
 | Subscription limits hit | Pause and ask; no paid fallback. |
 | Learner stalls on a piece | Hint ladder, 30–60 min steps, re-scope at timebox. |

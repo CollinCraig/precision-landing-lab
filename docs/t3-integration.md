@@ -14,7 +14,7 @@ How the lab uses T3's built-in features. Status per item: **in use**, **planned*
 | Claude artifacts (private pages) | Demo pages and design concepts to browse on the iPad; shareable later by choice | Side project A, every demo | planned |
 | Attachments | Screenshots and clips sent between threads for review | M2+ | planned |
 | **Scheduled tasks** | Nightly fixed-seed regression run + a short morning digest; weekly usage check | After M1 (needs a stable runner) | needs Collin |
-| **Linked environments** (StarkPC) | Send heavy work (Gazebo rendering, M4 batch evaluation) to the RTX 3080 via `delegate_task` on that machine | M2/M4, if laptop is too slow | needs Collin (link StarkPC) |
+| **Linked environments** (optional desktop PC) | Send heavy work (Gazebo rendering, M4 batch evaluation) to the RTX 3080 via `delegate_task` on that machine | M2/M4, if laptop is too slow | needs Collin (link optional desktop PC) |
 | Device panel (iOS/Android simulators) | Check that the demo pages and dashboard work at iPad/phone size | Optional | needs Collin (Settings → Integrations → Devices) |
 | PR linking / watching | PR-based reviews once the public GitHub repo exists | After first push | planned |
 
