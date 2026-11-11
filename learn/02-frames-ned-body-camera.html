@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Frames: NED, Body, Camera</title>
+<meta name="description" content="Learning explainer 02: drag a drone to yaw, pitch and roll it, and see one ground point in the NED, body FRD and camera frames.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f3f1eb; --panel:#fbfaf6; --panel-2:#f1eee6; --ink:#1a1e23; --ink-2:#4b535c; --ink-3:#6f7780; --rule:#d8d4ca;
+  --accent:#2a5bd7; --ok:#1f8c48; --warn:#a86a00; --bad:#c2352a; --cyan:#0a849f; --tdpc:#e0ad12;
+  --ax-x:#cf3a2c; --ax-y:#1f8c48; --ax-z:#2a5bd7; --ground:#d9d5cb; --ground-line:#c3beb2; --deck:#43484f;
+  --shadow:0 1px 0 rgba(0,0,0,.03),0 8px 28px -12px rgba(30,30,20,.18);
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#808a94; --rule:#26303a;
+  --accent:#7d9dff; --ok:#46c779; --warn:#e3a33a; --bad:#ff6b5e; --cyan:#3cc2e0; --tdpc:#f0c02e;
+  --ax-x:#ff6b5e; --ax-y:#46c779; --ax-z:#7d9dff; --ground:#1c2228; --ground-line:#2b343d; --deck:#2c3238;
+  --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#808a94; --rule:#26303a;
+  --accent:#7d9dff; --ok:#46c779; --warn:#e3a33a; --bad:#ff6b5e; --cyan:#3cc2e0; --tdpc:#f0c02e;
+  --ax-x:#ff6b5e; --ax-y:#46c779; --ax-z:#7d9dff; --ground:#1c2228; --ground-line:#2b343d; --deck:#2c3238;
+  --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--sans)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px 64px}
+header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:32px 0 20px;border-bottom:1px solid var(--rule)}
+.eyebrow{font:500 12px/1.3 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.eyebrow a{color:inherit}
+h1{font-size:clamp(26px,4vw,38px);line-height:1.1;margin:10px 0 8px;letter-spacing:-.015em;font-weight:700}
+.lede{color:var(--ink-2);max-width:64ch;margin:0}
+.toggle{flex:none;font:500 13px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:999px;padding:9px 14px;cursor:pointer;min-height:40px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin:14px 0 0;font:13px var(--mono);color:var(--ink-3)}
+.meta b{color:var(--ink-2);font-weight:500}
+section{margin-top:44px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:12px}
+.sec-head .n{font:600 13px var(--mono);color:var(--ink-3)}
+h2{font-size:22px;margin:0;letter-spacing:-.01em}
+h3{font-size:16px;margin:18px 0 6px}
+p{max-width:70ch}
+.prose p,.prose li{color:var(--ink-2)}
+.prose li{max-width:68ch}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
+.grid.even{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.pad{padding:16px 18px}
+.fig{padding:10px}
+.fig svg,.fig canvas{display:block;width:100%;height:auto}
+figure{margin:0}
+figcaption{font-size:13px;color:var(--ink-3);padding:6px 14px 12px}
+.notes{padding:16px 18px;font-size:14.5px}
+.notes h4{font:600 12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin:0 0 8px}
+.notes h4:not(:first-child){margin-top:18px}
+.notes p{margin:0 0 10px;color:var(--ink-2)}
+code,.mono{font-family:var(--mono);font-size:.92em}
+code{background:var(--panel-2);border:1px solid var(--rule);border-radius:4px;padding:0 4px}
+table.t{border-collapse:collapse;width:100%;font-size:14px}
+table.t th,table.t td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+table.t th{font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+table.t td{color:var(--ink-2)}
+table.t td:first-child{color:var(--ink)}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.btn,.chip{font:500 13px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:9px;padding:9px 13px;cursor:pointer;min-height:42px;touch-action:manipulation}
+.btn:hover,.chip:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.controls{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:12px 14px;border-top:1px solid var(--rule)}
+.slider{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font:13px var(--mono);color:var(--ink-2);min-width:240px;flex:1}
+.slider output{min-width:5.5em;text-align:right;color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--accent);height:32px}
+.badge{display:inline-block;font:600 10.5px/1.4 var(--mono);letter-spacing:.06em;padding:1px 6px;border-radius:4px;border:1px solid currentColor;vertical-align:1px;white-space:nowrap}
+.ill{color:var(--warn)}
+.unv{color:var(--bad)}
+.callout{border-left:3px solid var(--accent);background:var(--panel);padding:12px 16px;border-radius:0 10px 10px 0;margin:14px 0;max-width:72ch}
+.callout p{margin:0;color:var(--ink-2)}
+.callout b{color:var(--ink)}
+details.q{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:0 16px;margin:8px 0;max-width:76ch}
+details.q summary{cursor:pointer;padding:12px 0;font-weight:500;list-style-position:outside}
+details.q div{padding:0 0 12px;color:var(--ink-2)}
+footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-size:13px;color:var(--ink-3)}
+footer a{color:var(--ink-2);word-break:break-word}
+footer ul{padding-left:18px;margin:6px 0 12px}
+.no-sol{font:12.5px var(--mono);color:var(--ink-3);border:1px dashed var(--rule);border-radius:8px;padding:8px 12px;margin-top:14px;max-width:76ch}
+.t{font-family:var(--sans);fill:var(--ink)}
+.tm{font-family:var(--mono);fill:var(--ink-2)}
+@media (max-width:900px){.grid,.grid.even{grid-template-columns:1fr}}
+@media (max-width:560px){header.top{flex-direction:column;align-items:flex-start}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+#scene{touch-action:none;cursor:grab;border-radius:10px;background:var(--panel-2)}
+#scene:active{cursor:grabbing}
+#camview{border-radius:8px;background:#20252b;width:100%;height:auto;display:block}
+.readout td,.readout th{font-family:var(--mono);font-size:13px}
+.readout td.num{text-align:right;color:var(--ink);white-space:nowrap}
+.sw{display:inline-block;width:18px;height:0;border-top:3px solid currentColor;vertical-align:4px;margin-right:6px}
+.sw.d{border-top-style:dashed}
+.sw.thin{border-top-width:1.5px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font:12.5px var(--mono);color:var(--ink-2);padding:8px 14px 0}
+.sliders{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 18px;padding:10px 14px 14px;border-top:1px solid var(--rule)}
+.sliders .slider{min-width:0}
+.math{font:15px/1.9 var(--mono);background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:12px 16px;max-width:72ch;overflow-x:auto}
+.hl{color:var(--ink)}
+@media (max-width:520px){.sliders{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div>
+    <div class="eyebrow"><a href="index.html">Precision Landing Lab · learn</a> · 02 · read before M1 and M2</div>
+    <h1>One point, three frames: NED, body, camera</h1>
+    <p class="lede">A coordinate frame is an origin plus three axes. The same pad has different numbers in each frame. Turn the drone and watch the numbers change.</p>
+    <div class="meta"><span><b>Time</b> ~25 min</span><span><b>Prepares</b> M1 heights, M2 perception, M3 target estimate</span></div>
+  </div>
+  <button class="toggle" id="themeBtn" type="button" aria-label="Change between light and dark theme">◐ theme</button>
+</header>
+
+<!-- A -->
+<section id="frames">
+  <div class="sec-head"><span class="n">A</span><h2>The three frames</h2></div>
+  <div class="scroll-x card">
+  <table class="t">
+    <thead><tr><th>Frame</th><th>Origin</th><th>x</th><th>y</th><th>z</th><th>Turns with the drone?</th></tr></thead>
+    <tbody>
+      <tr><td><span class="sw thin" style="color:var(--ax-x)"></span>NED (local)</td><td>Fixed to the earth. ArduPilot uses the EKF origin.</td><td>North</td><td>East</td><td><b>Down</b></td><td>No</td></tr>
+      <tr><td><span class="sw" style="color:var(--ax-x)"></span>Body FRD</td><td>Moves with the drone</td><td>Forward (nose)</td><td>Right</td><td><b>Down</b> (through the belly)</td><td>Yes, all three angles</td></tr>
+      <tr><td><span class="sw d" style="color:var(--ax-x)"></span>Camera (optical)</td><td>The lens</td><td>Right in the image</td><td>Down in the image</td><td>Out of the lens</td><td>Yes, fixed to the body</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="prose">
+    <p>MAVLink defines <code>MAV_FRAME_LOCAL_NED</code> as "x: North, y: East, z: Down" with an origin fixed to the earth. It defines <code>MAV_FRAME_BODY_FRD</code> as "x: Forward, y: Right, z: Down" with an origin that travels with the vehicle.</p>
+    <p>The camera frame here uses the common computer-vision convention (OpenCV style). The camera points down. The top of the image points to the nose. This mount is an assumption for this page. M2 defines the real camera mount. <span class="badge unv">UNVERIFIED for the M2 camera</span></p>
+  </div>
+</section>
+
+<!-- B -->
+<section id="play">
+  <div class="sec-head"><span class="n">B</span><h2>Turn the drone</h2></div>
+  <div class="grid">
+    <figure class="card">
+      <div class="controls" style="border-top:0">
+        <span class="mono" style="font-size:12.5px;color:var(--ink-3)">Drag on the scene to change</span>
+        <button class="chip" type="button" data-drag="att" aria-pressed="true">Attitude</button>
+        <button class="chip" type="button" data-drag="view" aria-pressed="false">View</button>
+        <span style="flex:1"></span>
+        <button class="btn" type="button" data-preset="level">Level</button>
+        <button class="btn" type="button" data-preset="east">Nose east</button>
+        <button class="btn" type="button" data-preset="pitch">Nose down 20°</button>
+        <button class="btn" type="button" data-preset="roll">Roll right 30°</button>
+      </div>
+      <div class="fig"><canvas id="scene" width="760" height="470" aria-label="3D view of the drone, the pad and the three sets of axes"></canvas></div>
+      <div class="legend">
+        <span><span class="sw thin" style="color:var(--ax-x)"></span>NED (at home)</span>
+        <span><span class="sw" style="color:var(--ax-x)"></span>body FRD</span>
+        <span><span class="sw d" style="color:var(--ax-x)"></span>camera</span>
+        <span style="color:var(--ax-x)">■ x</span><span style="color:var(--ax-y)">■ y</span><span style="color:var(--ax-z)">■ z</span>
+      </div>
+      <div class="sliders">
+        <label class="slider">yaw ψ<input type="range" id="yaw" min="-180" max="180" step="1" value="0"><output id="yawO"></output></label>
+        <label class="slider">pitch θ<input type="range" id="pitch" min="-45" max="45" step="1" value="0"><output id="pitchO"></output></label>
+        <label class="slider">roll φ<input type="range" id="roll" min="-45" max="45" step="1" value="0"><output id="rollO"></output></label>
+        <label class="slider">height<input type="range" id="hgt" min="0" max="10" step="0.5" value="5"><output id="hgtO"></output></label>
+        <label class="slider">pad N<input type="range" id="pn" min="-6" max="6" step="0.25" value="2"><output id="pnO"></output></label>
+        <label class="slider">pad E<input type="range" id="pe" min="-6" max="6" step="0.25" value="1"><output id="peO"></output></label>
+      </div>
+      <figcaption>Drag left or right for yaw. Drag up or down for pitch. Use the slider for roll. Select "View" to turn the scene.</figcaption>
+    </figure>
+    <div>
+      <div class="card">
+        <div class="notes" style="padding-bottom:6px"><h4>Pad center in each frame (m)</h4></div>
+        <div class="scroll-x">
+        <table class="t readout">
+          <thead><tr><th></th><th style="text-align:right">x</th><th style="text-align:right">y</th><th style="text-align:right">z</th></tr></thead>
+          <tbody>
+            <tr><td>pad, NED<br><span style="color:var(--ink-3)">from home</span></td><td class="num" id="r0x"></td><td class="num" id="r0y"></td><td class="num" id="r0z"></td></tr>
+            <tr><td>drone, NED<br><span style="color:var(--ink-3)">from home</span></td><td class="num" id="r1x"></td><td class="num" id="r1y"></td><td class="num" id="r1z"></td></tr>
+            <tr><td>pad, NED<br><span style="color:var(--ink-3)">from drone</span></td><td class="num" id="r2x"></td><td class="num" id="r2y"></td><td class="num" id="r2z"></td></tr>
+            <tr><td>pad, body FRD</td><td class="num" id="r3x"></td><td class="num" id="r3y"></td><td class="num" id="r3z"></td></tr>
+            <tr><td>pad, camera</td><td class="num" id="r4x"></td><td class="num" id="r4y"></td><td class="num" id="r4z"></td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="notes" style="padding-bottom:4px"><h4>Camera image (toy pinhole, 60° wide)</h4></div>
+        <div style="padding:0 12px 6px"><canvas id="camview" width="320" height="240" aria-label="What the downward camera sees"></canvas></div>
+        <div class="notes" style="padding-top:4px"><p id="camNote" style="margin:0"></p></div>
+      </div>
+    </div>
+  </div>
+  <div class="callout"><p><b>Look for this.</b> Yaw the drone. The NED rows do not change. The body and camera rows change. The pad did not move. Only the frame turned.</p></div>
+</section>
+
+<!-- C -->
+<section id="down">
+  <div class="sec-head"><span class="n">C</span><h2>Why "down is positive z", and why 5 m up is z = −5</h2></div>
+  <div class="grid even">
+    <figure class="card">
+      <div class="fig">
+      <svg viewBox="0 0 420 300" role="img" aria-labelledby="dT">
+        <title id="dT">Side view: height above home and NED z have opposite signs</title>
+        <rect x="0" y="230" width="420" height="70" fill="var(--ground)"/>
+        <path d="M0 230H420" stroke="var(--ground-line)" stroke-width="2"/>
+        <text x="12" y="252" class="tm" font-size="11">home (NED origin), z = 0</text>
+        <g id="dDrone"><path d="M-26 0H26" stroke="var(--ink)" stroke-width="4" stroke-linecap="round"/><circle cx="-26" cy="-3" r="9" fill="none" stroke="var(--ink)" stroke-width="1.5"/><circle cx="26" cy="-3" r="9" fill="none" stroke="var(--ink)" stroke-width="1.5"/><rect x="-8" y="-5" width="16" height="10" rx="3" fill="var(--ink)"/></g>
+        <path id="dUp" stroke="var(--ok)" stroke-width="3" fill="none"/>
+        <text id="dUpT" class="tm" font-size="12" style="fill:var(--ok)"></text>
+        <path d="M300 40V222" stroke="var(--ax-z)" stroke-width="3"/>
+        <path d="M300 230l-7 -14h14z" fill="var(--ax-z)"/>
+        <text x="312" y="226" class="tm" font-size="12" style="fill:var(--ax-z)">+z (Down)</text>
+        <text id="dZT" class="tm" font-size="12" style="fill:var(--ax-z)"></text>
+        <path id="dZTick" stroke="var(--ax-z)" stroke-width="2"/>
+      </svg>
+      </div>
+      <div class="controls"><label class="slider">height<input type="range" id="hgt2" min="0" max="10" step="0.5" value="5"><output id="hgt2O"></output></label></div>
+    </figure>
+    <div class="card notes">
+      <h4>The reason</h4>
+      <p>Aircraft use a right-handed frame with x forward and y right. The right-hand rule then puts z down. NED follows the same pattern on the ground: North, East, Down.</p>
+      <p>With z down, a positive z is below the origin. A drone 5 m above home is 5 m in the negative z direction. So its z is −5.</p>
+      <h4>Same idea, other places</h4>
+      <p><code>GLOBAL_POSITION_INT.vz</code> is positive down. A climb gives a negative <code>vz</code>.</p>
+      <p><code>GLOBAL_POSITION_INT.relative_alt</code> is the exception. It is height above home, positive up, in millimetres.</p>
+      <h4>The common bug</h4>
+      <p>A script asks for z = +5 and expects a climb. In NED, z = +5 is 5 m below home. Always say which frame a number is in, and check the sign.</p>
+    </div>
+  </div>
+</section>
+
+<!-- D -->
+<section id="rot">
+  <div class="sec-head"><span class="n">D</span><h2>The rotation idea (concept, not code)</h2></div>
+  <div class="prose">
+    <p>Three angles describe the attitude. Yaw ψ turns the nose around the down axis. Pitch θ lifts the nose. Roll φ lowers the right side. This page applies them in the order yaw, then pitch, then roll. This order is common in aerospace.</p>
+    <p>The three turns combine into one rotation matrix R. R takes a vector written in body axes and gives the same vector in NED axes. Its transpose does the opposite.</p>
+  </div>
+  <div class="math">
+    R = R<sub>z</sub>(ψ) · R<sub>y</sub>(θ) · R<sub>x</sub>(φ)<br>
+    v<sub>NED</sub> = R · v<sub>body</sub> &nbsp;&nbsp;&nbsp; v<sub>body</sub> = R<sup>T</sup> · v<sub>NED</sub><br>
+    <span style="color:var(--ink-3)">positive ψ: nose right · positive θ: nose up · positive φ: right side down</span>
+  </div>
+  <div class="prose">
+    <p>The camera frame has a fixed relation to the body frame. That relation comes from the camera mount. The camera also sits at an offset from the center of the drone. ArduPilot has parameters for these mount details, for example <code>PLND_YAW_ALIGN</code> and <code>PLND_CAM_POS_X/Y/Z</code>.</p>
+    <p>Two different things can change a number: a turn of the frame and a move of the origin. Keep them apart. A turn changes the direction of the axes. A move changes the point that you measure from.</p>
+  </div>
+  <div class="callout"><p><b>Your M2 and M3 work.</b> You write the chain from camera to body to NED yourself. This page gives you a picture to test your numbers against. It does not give you the conversion code.</p></div>
+</section>
+
+<!-- E -->
+<section id="check">
+  <div class="sec-head"><span class="n">E</span><h2>Check yourself</h2></div>
+  <p class="prose" style="color:var(--ink-2)">Work out each answer first. Then use the scene to test it.</p>
+  <details class="q"><summary>1. The drone is level, nose North, 5 m above home. The pad is 3 m North of home. What is the pad in body FRD?</summary><div>About (3, 0, 5). The pad is 3 m ahead, 0 m to the side and 5 m below. Set yaw 0, height 5, pad N 3, pad E 0 to check.</div></details>
+  <details class="q"><summary>2. Same scene, but the nose points East (yaw 90°). What is the pad in body FRD now?</summary><div>About (0, −3, 5). North is now on the left side of the drone, and left is negative y in FRD.</div></details>
+  <details class="q"><summary>3. Same as question 1. Where does the pad appear in the camera image?</summary><div>Above the image center, on the vertical center line. In this mount the top of the image points to the nose. The camera y value is negative, because camera y points down in the image.</div></details>
+  <details class="q"><summary>4. The drone pitches nose down 20°. The pad does not move. Does the pad move in the camera image? Why does this matter for M3?</summary><div>Yes. The camera turns with the body, so the pad moves in the image. A detector that ignores attitude reads a turn as a move of the pad. ArduPilot's precision landing expects a frame that it can correct with attitude, for example <code>MAV_FRAME_BODY_FRD</code>.</div></details>
+  <details class="q"><summary>5. The drone climbs from 2 m to 7 m. What are the start and end NED z values? What is the sign of vz during the climb?</summary><div>z goes from −2 to −7. vz is negative during the climb.</div></details>
+  <p class="no-sol">This page explains concepts only. It gives no camera → body → NED code and no AprilTag pose code. The page script draws the scene. It is JavaScript for this view only, with an assumed camera mount. Do not use it as a reference for your M2 or M3 pieces.</p>
+</section>
+
+<footer>
+  <b>Sources</b> (checked 2026-11-11)
+  <ul>
+    <li>MAV_FRAME definitions (LOCAL_NED, BODY_FRD, LOCAL_FRD): <a href="https://mavlink.io/en/messages/common.html#MAV_FRAME">mavlink.io/en/messages/common.html#MAV_FRAME</a></li>
+    <li>GLOBAL_POSITION_INT (relative_alt positive up in mm, vz positive down): <a href="https://mavlink.io/en/messages/common.html#GLOBAL_POSITION_INT">mavlink.io/en/messages/common.html#GLOBAL_POSITION_INT</a></li>
+    <li>ArduPilot LOCAL_NED origin = EKF origin: <a href="https://ardupilot.org/dev/docs/copter-commands-in-guided-mode.html">ardupilot.org/dev/docs/copter-commands-in-guided-mode.html</a></li>
+    <li>Camera mount parameters PLND_YAW_ALIGN, PLND_CAM_POS_X/Y/Z: <a href="https://ardupilot.org/copter/docs/precision-landing-and-loiter.html">precision-landing-and-loiter.html</a> · <a href="https://ardupilot.org/copter/docs/parameters.html">parameters.html</a></li>
+    <li>LANDING_TARGET frames (BODY_FRD for hard-mounted cameras): <a href="https://ardupilot.org/dev/docs/mavlink-precision-landing.html">ardupilot.org/dev/docs/mavlink-precision-landing.html</a></li>
+  </ul>
+  <b>UNVERIFIED</b>: the camera mount on this page (down-facing, image top toward the nose, OpenCV optical axes). M2 sets the real mount. The 60° field of view and the pixel size are ILLUSTRATIVE. The yaw-pitch-roll order is the common aerospace convention; this page does not claim it as an ArduPilot internal detail.
+</footer>
+</div>
+
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('pll-theme');if(s)r.setAttribute('data-theme',s);}catch(e){}b.addEventListener('click',function(){var c=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');var n=c==='dark'?'light':'dark';r.setAttribute('data-theme',n);try{localStorage.setItem('pll-theme',n);}catch(e){}document.dispatchEvent(new Event('themechange'));});})();</script>
+<script>
+/* Scene drawing for this page only. Assumed camera mount. Not reference code for the lab's pieces. */
+(function(){
+  'use strict';
+  var D2R=Math.PI/180, $=function(i){return document.getElementById(i);};
+  var st={yaw:0,pitch:0,roll:0,h:5,pn:2,pe:1,az:-35,el:32,drag:'att'};
+  var C={};
+  function readColors(){var cs=getComputedStyle(document.documentElement);['--ink','--ink-2','--ink-3','--rule','--panel-2','--ground','--ground-line','--ax-x','--ax-y','--ax-z','--accent','--tdpc','--deck','--ok','--bad','--bg'].forEach(function(k){C[k]=cs.getPropertyValue(k).trim();});}
+  function mmul(a,b){var r=[[0,0,0],[0,0,0],[0,0,0]];for(var i=0;i<3;i++)for(var j=0;j<3;j++)for(var k=0;k<3;k++)r[i][j]+=a[i][k]*b[k][j];return r;}
+  function att(){
+    var y=st.yaw*D2R,p=st.pitch*D2R,r=st.roll*D2R,cy=Math.cos(y),sy=Math.sin(y),cp=Math.cos(p),sp=Math.sin(p),cr=Math.cos(r),sr=Math.sin(r);
+    return mmul(mmul([[cy,-sy,0],[sy,cy,0],[0,0,1]],[[cp,0,sp],[0,1,0],[-sp,0,cp]]),[[1,0,0],[0,cr,-sr],[0,sr,cr]]);
+  }
+  function apply(M,v){return [M[0][0]*v[0]+M[0][1]*v[1]+M[0][2]*v[2],M[1][0]*v[0]+M[1][1]*v[1]+M[1][2]*v[2],M[2][0]*v[0]+M[2][1]*v[1]+M[2][2]*v[2]];}
+  function applyT(M,v){return [M[0][0]*v[0]+M[1][0]*v[1]+M[2][0]*v[2],M[0][1]*v[0]+M[1][1]*v[1]+M[2][1]*v[2],M[0][2]*v[0]+M[1][2]*v[1]+M[2][2]*v[2]];}
+  /* assumed mount: camera axes written in body axes */
+  var CAM=[[0,1,0],[-1,0,0],[0,0,1]]; /* rows: cam x = body y, cam y = -body x, cam z = body z */
+  function camFromBody(b){return [b[1],-b[0],b[2]];}
+
+  var cv=$('scene'),ctx=cv.getContext('2d'),W=760,H=470,DPR=1;
+  function size(){var w=cv.parentNode.clientWidth-20;W=Math.max(300,w);H=Math.round(W*0.62);DPR=window.devicePixelRatio||1;cv.width=W*DPR;cv.height=H*DPR;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);}
+  /* NED point -> screen */
+  function proj(n){
+    var X=n[1],Y=n[0],Z=-n[2]-2.5,az=st.az*D2R,el=st.el*D2R;
+    var x1=X*Math.cos(az)-Y*Math.sin(az),y1=X*Math.sin(az)+Y*Math.cos(az);
+    var up=Z*Math.cos(el)+y1*Math.sin(el),depth=y1*Math.cos(el)-Z*Math.sin(el);
+    var s=W/16*(22/(22+depth));
+    return [W/2+x1*s,H*0.52-up*s,depth];
+  }
+  function line(a,b,col,w,dash){var p=proj(a),q=proj(b);ctx.beginPath();ctx.moveTo(p[0],p[1]);ctx.lineTo(q[0],q[1]);ctx.strokeStyle=col;ctx.lineWidth=w;ctx.setLineDash(dash||[]);ctx.stroke();ctx.setLineDash([]);}
+  function arrow(o,v,col,w,dash,label){
+    var e=[o[0]+v[0],o[1]+v[1],o[2]+v[2]];line(o,e,col,w,dash);
+    var p=proj(o),q=proj(e),dx=q[0]-p[0],dy=q[1]-p[1],L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L,hs=6+w;
+    ctx.beginPath();ctx.moveTo(q[0],q[1]);ctx.lineTo(q[0]-ux*hs-uy*hs*.5,q[1]-uy*hs+ux*hs*.5);ctx.lineTo(q[0]-ux*hs+uy*hs*.5,q[1]-uy*hs-ux*hs*.5);ctx.closePath();ctx.fillStyle=col;ctx.fill();
+    if(label){ctx.font='600 12px "IBM Plex Mono",ui-monospace,monospace';ctx.fillStyle=col;ctx.fillText(label,q[0]+ux*8-6,q[1]+uy*8+4);}
+  }
+  function poly(pts,fill,stroke,w){ctx.beginPath();pts.forEach(function(n,i){var p=proj(n);if(i)ctx.lineTo(p[0],p[1]);else ctx.moveTo(p[0],p[1]);});ctx.closePath();if(fill){ctx.fillStyle=fill;ctx.fill();}if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=w||1;ctx.stroke();}}
+  function draw(){
+    readColors();ctx.clearRect(0,0,W,H);
+    var R=att(),dr=[0,0,-st.h],P=[st.pn,st.pe,0];
+    /* ground */
+    poly([[-7,-7,0],[-7,7,0],[7,7,0],[7,-7,0]],C['--ground'],null);
+    for(var g=-7;g<=7;g++){line([g,-7,0],[g,7,0],C['--ground-line'],1);line([-7,g,0],[7,g,0],C['--ground-line'],1);}
+    /* pad: 2 m FATO square, 1 m TLOF, tag */
+    poly([[P[0]-1,P[1]-1,0],[P[0]-1,P[1]+1,0],[P[0]+1,P[1]+1,0],[P[0]+1,P[1]-1,0]],C['--deck'],null);
+    var ring=[];for(var i=0;i<28;i++){var a=i/28*2*Math.PI;ring.push([P[0]+.5*Math.cos(a),P[1]+.5*Math.sin(a),0]);}
+    poly(ring,null,C['--tdpc'],2.5);
+    poly([[P[0]-.2,P[1]-.2,0],[P[0]-.2,P[1]+.2,0],[P[0]+.2,P[1]+.2,0],[P[0]+.2,P[1]-.2,0]],'#f6f5f0','#111',1);
+    /* NED axes at home */
+    var o=[0,0,0];
+    arrow(o,[2,0,0],C['--ax-x'],1.6,null,'N');arrow(o,[0,2,0],C['--ax-y'],1.6,null,'E');arrow(o,[0,0,1.6],C['--ax-z'],1.6,[2,3],'D');
+    /* shadow + plumb line */
+    var sh=[];[[.45,.45],[.45,-.45],[-.45,-.45],[-.45,.45]].forEach(function(q){var v=apply(R,[q[0],q[1],0]);sh.push([v[0],v[1],0]);});
+    ctx.globalAlpha=.25;poly(sh,C['--ink'],null);ctx.globalAlpha=1;
+    line(dr,[0,0,0],C['--ink-3'],1,[3,4]);
+    line(dr,P,C['--accent'],1.4,[6,5]);
+    /* camera footprint (60x45 deg) */
+    var t=Math.tan(30*D2R),tv=Math.tan(22.5*D2R),fp=[],ok=true;
+    [[-t,-tv],[t,-tv],[t,tv],[-t,tv]].forEach(function(c){var cb=[-c[1],c[0],1];var n=apply(R,cb);if(n[2]<=0.05){ok=false;return;}var k=st.h/n[2];fp.push([dr[0]+n[0]*k,dr[1]+n[1]*k,0]);});
+    if(ok&&st.h>0){ctx.globalAlpha=.12;poly(fp,C['--accent'],null);ctx.globalAlpha=.6;poly(fp,null,C['--accent'],1);ctx.globalAlpha=1;}
+    /* drone */
+    var arms=[[.45,.45],[-.45,-.45],[.45,-.45],[-.45,.45]];
+    arms.forEach(function(q){var e=apply(R,[q[0],q[1],0]);line(dr,[dr[0]+e[0],dr[1]+e[1],dr[2]+e[2]],C['--ink'],3.5);
+      var pr=[];for(var i=0;i<16;i++){var a=i/16*2*Math.PI,v=apply(R,[q[0]+.2*Math.cos(a),q[1]+.2*Math.sin(a),-.04]);pr.push([dr[0]+v[0],dr[1]+v[1],dr[2]+v[2]]);}
+      poly(pr,null,C['--ink-2'],1.2);});
+    var nose=apply(R,[.35,0,0]);line(dr,[dr[0]+nose[0],dr[1]+nose[1],dr[2]+nose[2]],C['--bad'],4);
+    /* body axes */
+    var L=1.7;
+    arrow(dr,apply(R,[L,0,0]),C['--ax-x'],3,null,'F');arrow(dr,apply(R,[0,L,0]),C['--ax-y'],3,null,'R');arrow(dr,apply(R,[0,0,L]),C['--ax-z'],3,null,'D');
+    /* camera axes, drawn a little below the body */
+    var co=apply(R,[0,0,.25]);co=[dr[0]+co[0],dr[1]+co[1],dr[2]+co[2]];var Lc=1.05;
+    for(var j=0;j<3;j++){var v=apply(R,[CAM[j][0]*Lc,CAM[j][1]*Lc,CAM[j][2]*Lc]);arrow(co,v,[C['--ax-x'],C['--ax-y'],C['--ax-z']][j],1.8,[5,4],['xc','yc','zc'][j]);}
+    readouts(R,dr,P);camView(R,dr,P);
+  }
+  function f(v){var s=(Math.abs(v)<0.005?0:v).toFixed(2);return (v>=0||s==='0.00'?'+':'')+s.replace('-','−');}
+  function setRow(i,v){$('r'+i+'x').textContent=f(v[0]);$('r'+i+'y').textContent=f(v[1]);$('r'+i+'z').textContent=f(v[2]);}
+  var last={};
+  function readouts(R,dr,P){
+    var rel=[P[0]-dr[0],P[1]-dr[1],P[2]-dr[2]],b=applyT(R,rel),c=camFromBody(b);
+    setRow(0,P);setRow(1,dr);setRow(2,rel);setRow(3,b);setRow(4,c);last.c=c;
+  }
+  var cc=$('camview'),cx2=cc.getContext('2d');
+  function camView(R,dr,P){
+    var w=320,h=240,fpx=(w/2)/Math.tan(30*D2R);cx2.setTransform(1,0,0,1,0,0);cx2.fillStyle='#262c33';cx2.fillRect(0,0,w,h);
+    cx2.strokeStyle='rgba(255,255,255,.25)';cx2.lineWidth=1;cx2.beginPath();cx2.moveTo(w/2,0);cx2.lineTo(w/2,h);cx2.moveTo(0,h/2);cx2.lineTo(w,h/2);cx2.stroke();
+    function pix(n){var b=applyT(R,[n[0]-dr[0],n[1]-dr[1],n[2]-dr[2]]),c=camFromBody(b);if(c[2]<=0.05)return null;return [w/2+fpx*c[0]/c[2],h/2+fpx*c[1]/c[2]];}
+    function q(pts,fill,stroke){var ps=pts.map(pix);if(ps.some(function(p){return !p;}))return false;cx2.beginPath();ps.forEach(function(p,i){if(i)cx2.lineTo(p[0],p[1]);else cx2.moveTo(p[0],p[1]);});cx2.closePath();if(fill){cx2.fillStyle=fill;cx2.fill();}if(stroke){cx2.strokeStyle=stroke;cx2.lineWidth=2;cx2.stroke();}return true;}
+    q([[P[0]-1,P[1]-1,0],[P[0]-1,P[1]+1,0],[P[0]+1,P[1]+1,0],[P[0]+1,P[1]-1,0]],'#4a5058',null);
+    var ring=[];for(var i=0;i<28;i++){var a=i/28*2*Math.PI;ring.push([P[0]+.5*Math.cos(a),P[1]+.5*Math.sin(a),0]);}
+    q(ring,null,'#f0c02e');
+    var tag=q([[P[0]-.2,P[1]-.2,0],[P[0]-.2,P[1]+.2,0],[P[0]+.2,P[1]+.2,0],[P[0]+.2,P[1]-.2,0]],'#f6f5f0','#111');
+    cx2.fillStyle='rgba(255,255,255,.8)';cx2.font='11px "IBM Plex Mono",monospace';cx2.fillText('↑ nose',6,14);cx2.fillText('xc →',w-38,h/2-6);cx2.fillText('yc ↓',w/2+4,h-6);
+    var c=last.c,note=$('camNote');
+    if(!tag||c[2]<=0.05){note.textContent='The pad is not in front of the lens. The camera cannot see it.';return;}
+    var u=w/2+fpx*c[0]/c[2],v=h/2+fpx*c[1]/c[2],inside=u>=0&&u<=w&&v>=0&&v<=h;
+    note.innerHTML='Pad center at pixel ('+Math.round(u*2)+', '+Math.round(v*2)+') of 640 × 480. '+(inside?'<span style="color:var(--ok)">In view.</span>':'<span style="color:var(--bad)">Out of view.</span>')+' <span class="badge ill">ILLUSTRATIVE</span>';
+  }
+  /* controls */
+  var ids=['yaw','pitch','roll','hgt','pn','pe'],keys=['yaw','pitch','roll','h','pn','pe'],units=['°','°','°',' m',' m',' m'];
+  function sync(){ids.forEach(function(id,i){$(id).value=st[keys[i]];$(id+'O').textContent=(+st[keys[i]]).toFixed(i<3?0:2)+units[i];});$('hgt2').value=st.h;drawDown();draw();}
+  ids.forEach(function(id,i){$(id).addEventListener('input',function(){st[keys[i]]=+this.value;sync();});});
+  $('hgt2').addEventListener('input',function(){st.h=+this.value;sync();});
+  var PRE={level:{yaw:0,pitch:0,roll:0},east:{yaw:90,pitch:0,roll:0},pitch:{yaw:0,pitch:-20,roll:0},roll:{yaw:0,pitch:0,roll:30}};
+  document.querySelectorAll('[data-preset]').forEach(function(b){b.addEventListener('click',function(){var p=PRE[b.dataset.preset];for(var k in p)st[k]=p[k];sync();});});
+  document.querySelectorAll('[data-drag]').forEach(function(b){b.addEventListener('click',function(){st.drag=b.dataset.drag;document.querySelectorAll('[data-drag]').forEach(function(c){c.setAttribute('aria-pressed',c===b?'true':'false');});});});
+  var dragging=null;
+  cv.addEventListener('pointerdown',function(e){dragging={x:e.clientX,y:e.clientY};cv.setPointerCapture(e.pointerId);});
+  cv.addEventListener('pointermove',function(e){if(!dragging)return;var dx=e.clientX-dragging.x,dy=e.clientY-dragging.y;dragging={x:e.clientX,y:e.clientY};
+    if(st.drag==='att'){st.yaw=((st.yaw+dx*.6+540)%360)-180;st.pitch=Math.max(-45,Math.min(45,st.pitch-dy*.3));}
+    else{st.az=st.az-dx*.4;st.el=Math.max(5,Math.min(85,st.el+dy*.3));}
+    st.yaw=Math.round(st.yaw);st.pitch=Math.round(st.pitch);sync();});
+  ['pointerup','pointercancel'].forEach(function(t){cv.addEventListener(t,function(){dragging=null;});});
+  /* C: side view */
+  function drawDown(){
+    var y=230-st.h*18;$('dDrone').setAttribute('transform','translate(150,'+y+')');
+    $('dUp').setAttribute('d','M110 230V'+(y+4));$('dUpT').setAttribute('x',18);$('dUpT').setAttribute('y',Math.min(222,(230+y)/2+4));
+    $('dUpT').textContent='height '+st.h.toFixed(1)+' m ↑';
+    $('dZTick').setAttribute('d','M292 '+y+'H308');$('dZT').setAttribute('x',314);$('dZT').setAttribute('y',y+4);
+    $('dZT').textContent='z = '+(st.h===0?'0':'−'+st.h.toFixed(1));$('hgt2O').textContent=st.h.toFixed(1)+' m';
+  }
+  window.addEventListener('resize',function(){size();draw();});
+  document.addEventListener('themechange',draw);
+  try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);}catch(e){}
+  size();sync();
+})();
+</script>
+</body>
+</html>

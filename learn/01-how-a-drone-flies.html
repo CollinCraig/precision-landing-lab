@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How a Drone Flies</title>
+<meta name="description" content="Learning explainer 01: the autopilot and your script, flight modes, arming, MAVLink messages, and why a command is a request.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f3f1eb; --panel:#fbfaf6; --panel-2:#f1eee6; --ink:#1a1e23; --ink-2:#4b535c; --ink-3:#6f7780; --rule:#d8d4ca;
+  --accent:#2a5bd7; --ok:#1f8c48; --warn:#a86a00; --bad:#c2352a; --cyan:#0a849f; --tdpc:#e0ad12;
+  --ax-x:#cf3a2c; --ax-y:#1f8c48; --ax-z:#2a5bd7; --ground:#d9d5cb; --ground-line:#c3beb2; --deck:#43484f;
+  --shadow:0 1px 0 rgba(0,0,0,.03),0 8px 28px -12px rgba(30,30,20,.18);
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#808a94; --rule:#26303a;
+  --accent:#7d9dff; --ok:#46c779; --warn:#e3a33a; --bad:#ff6b5e; --cyan:#3cc2e0; --tdpc:#f0c02e;
+  --ax-x:#ff6b5e; --ax-y:#46c779; --ax-z:#7d9dff; --ground:#1c2228; --ground-line:#2b343d; --deck:#2c3238;
+  --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#808a94; --rule:#26303a;
+  --accent:#7d9dff; --ok:#46c779; --warn:#e3a33a; --bad:#ff6b5e; --cyan:#3cc2e0; --tdpc:#f0c02e;
+  --ax-x:#ff6b5e; --ax-y:#46c779; --ax-z:#7d9dff; --ground:#1c2228; --ground-line:#2b343d; --deck:#2c3238;
+  --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--sans)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px 64px}
+header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:32px 0 20px;border-bottom:1px solid var(--rule)}
+.eyebrow{font:500 12px/1.3 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.eyebrow a{color:inherit}
+h1{font-size:clamp(26px,4vw,38px);line-height:1.1;margin:10px 0 8px;letter-spacing:-.015em;font-weight:700}
+.lede{color:var(--ink-2);max-width:64ch;margin:0}
+.toggle{flex:none;font:500 13px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:999px;padding:9px 14px;cursor:pointer;min-height:40px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin:14px 0 0;font:13px var(--mono);color:var(--ink-3)}
+.meta b{color:var(--ink-2);font-weight:500}
+section{margin-top:44px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:12px}
+.sec-head .n{font:600 13px var(--mono);color:var(--ink-3)}
+h2{font-size:22px;margin:0;letter-spacing:-.01em}
+h3{font-size:16px;margin:18px 0 6px}
+p{max-width:70ch}
+.prose p,.prose li{color:var(--ink-2)}
+.prose li{max-width:68ch}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
+.grid.even{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.pad{padding:16px 18px}
+.fig{padding:10px}
+.fig svg,.fig canvas{display:block;width:100%;height:auto}
+figure{margin:0}
+figcaption{font-size:13px;color:var(--ink-3);padding:6px 14px 12px}
+.notes{padding:16px 18px;font-size:14.5px}
+.notes h4{font:600 12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin:0 0 8px}
+.notes h4:not(:first-child){margin-top:18px}
+.notes p{margin:0 0 10px;color:var(--ink-2)}
+code,.mono{font-family:var(--mono);font-size:.92em}
+code{background:var(--panel-2);border:1px solid var(--rule);border-radius:4px;padding:0 4px}
+table.t{border-collapse:collapse;width:100%;font-size:14px}
+table.t th,table.t td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+table.t th{font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+table.t td{color:var(--ink-2)}
+table.t td:first-child{color:var(--ink)}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.btn,.chip{font:500 13px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:9px;padding:9px 13px;cursor:pointer;min-height:42px;touch-action:manipulation}
+.btn:hover,.chip:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.controls{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:12px 14px;border-top:1px solid var(--rule)}
+.slider{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font:13px var(--mono);color:var(--ink-2);min-width:240px;flex:1}
+.slider output{min-width:5.5em;text-align:right;color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--accent);height:32px}
+.badge{display:inline-block;font:600 10.5px/1.4 var(--mono);letter-spacing:.06em;padding:1px 6px;border-radius:4px;border:1px solid currentColor;vertical-align:1px;white-space:nowrap}
+.ill{color:var(--warn)}
+.unv{color:var(--bad)}
+.callout{border-left:3px solid var(--accent);background:var(--panel);padding:12px 16px;border-radius:0 10px 10px 0;margin:14px 0;max-width:72ch}
+.callout p{margin:0;color:var(--ink-2)}
+.callout b{color:var(--ink)}
+details.q{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:0 16px;margin:8px 0;max-width:76ch}
+details.q summary{cursor:pointer;padding:12px 0;font-weight:500;list-style-position:outside}
+details.q div{padding:0 0 12px;color:var(--ink-2)}
+footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-size:13px;color:var(--ink-3)}
+footer a{color:var(--ink-2);word-break:break-word}
+footer ul{padding-left:18px;margin:6px 0 12px}
+.no-sol{font:12.5px var(--mono);color:var(--ink-3);border:1px dashed var(--rule);border-radius:8px;padding:8px 12px;margin-top:14px;max-width:76ch}
+.t{font-family:var(--sans);fill:var(--ink)}
+.tm{font-family:var(--mono);fill:var(--ink-2)}
+@media (max-width:900px){.grid,.grid.even{grid-template-columns:1fr}}
+@media (max-width:560px){header.top{flex-direction:column;align-items:flex-start}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.flow svg text{font-family:var(--mono)}
+.log{font:12.5px/1.5 var(--mono);height:260px;overflow-y:auto;padding:10px 12px;background:var(--panel-2);border-top:1px solid var(--rule)}
+.log div{padding:2px 0;border-bottom:1px dotted var(--rule);color:var(--ink-2);cursor:default}
+.log .out{color:var(--accent)}
+.log .in{color:var(--ink)}
+.log .bad{color:var(--bad)}
+.log .warn{color:var(--warn)}
+.log .ok{color:var(--ok)}
+.state{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:14px}
+.state .box{border:1px solid var(--rule);border-radius:10px;padding:10px 12px;background:var(--panel-2)}
+.state .box h4{margin:0 0 6px;font:600 11.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+.state dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:0;font:13.5px var(--mono)}
+.state dt{color:var(--ink-3)}
+.state dd{margin:0;color:var(--ink)}
+.verdict{margin:0 14px 14px;padding:10px 12px;border-radius:10px;font-size:14px;border:1px solid var(--rule);background:var(--panel-2);color:var(--ink-2)}
+.verdict.mismatch{border-color:var(--bad);color:var(--ink)}
+.verdict.match{border-color:var(--ok)}
+.modes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:14px}
+.mode{border:1px solid var(--rule);border-radius:10px;padding:10px;background:var(--panel-2);cursor:pointer;text-align:left;font:inherit;color:inherit;min-height:44px}
+.mode[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.mode b{font-family:var(--mono);font-size:15px}
+.mode span{display:block;font:12px var(--mono);color:var(--ink-3)}
+.mode-detail{padding:0 18px 16px}
+.mode-detail p{margin:6px 0;color:var(--ink-2)}
+.meter{display:flex;height:10px;border-radius:5px;overflow:hidden;border:1px solid var(--rule);max-width:420px;margin:8px 0 4px}
+.meter i{display:block;height:100%}
+@media (max-width:700px){.modes{grid-template-columns:repeat(2,minmax(0,1fr))}.state{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div>
+    <div class="eyebrow"><a href="index.html">Precision Landing Lab · learn</a> · 01 · read before M1</div>
+    <h1>How a drone flies (and who flies it)</h1>
+    <p class="lede">The autopilot flies the drone. Your script sends requests to the autopilot and watches the result. This page shows the parts, the flight modes, arming, and the MAVLink messages between them.</p>
+    <div class="meta"><span><b>Time</b> ~20 min</span><span><b>Prepares</b> mission.py (M1)</span><span><b>Pairs with</b> docs/primers/00-sitl-and-mavlink.md</span></div>
+  </div>
+  <button class="toggle" id="themeBtn" type="button" aria-label="Change between light and dark theme">◐ theme</button>
+</header>
+
+<!-- A -->
+<section id="who">
+  <div class="sec-head"><span class="n">A</span><h2>The autopilot and your script</h2></div>
+  <div class="grid">
+    <figure class="card">
+      <div class="fig flow">
+      <svg viewBox="0 0 760 300" role="img" aria-labelledby="whoT">
+        <title id="whoT">Your script talks MAVLink to ArduPilot. ArduPilot reads sensors and commands motors.</title>
+        <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--ink-3)"/></marker></defs>
+        <rect x="14" y="70" width="190" height="130" rx="12" fill="var(--panel-2)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="109" y="104" text-anchor="middle" class="t" font-size="16" font-weight="600">Your script</text>
+        <text x="109" y="126" text-anchor="middle" class="tm" font-size="12">mission.py (Python)</text>
+        <text x="109" y="156" text-anchor="middle" class="tm" font-size="11.5">decides WHAT to do</text>
+        <text x="109" y="174" text-anchor="middle" class="tm" font-size="11.5">slow: a few times/s</text>
+
+        <rect x="290" y="60" width="210" height="150" rx="12" fill="var(--panel-2)" stroke="var(--ink)" stroke-width="1.5"/>
+        <text x="395" y="94" text-anchor="middle" class="t" font-size="16" font-weight="600">ArduPilot</text>
+        <text x="395" y="116" text-anchor="middle" class="tm" font-size="12">the autopilot (Copter)</text>
+        <text x="395" y="146" text-anchor="middle" class="tm" font-size="11.5">decides HOW to do it</text>
+        <text x="395" y="164" text-anchor="middle" class="tm" font-size="11.5">fast control loops</text>
+        <text x="395" y="182" text-anchor="middle" class="tm" font-size="11.5">safety checks, failsafes</text>
+
+        <rect x="586" y="40" width="160" height="80" rx="10" fill="var(--panel-2)" stroke="var(--rule)"/>
+        <text x="666" y="74" text-anchor="middle" class="t" font-size="14" font-weight="600">Motors</text>
+        <text x="666" y="94" text-anchor="middle" class="tm" font-size="11">SITL: physics model</text>
+        <rect x="586" y="150" width="160" height="80" rx="10" fill="var(--panel-2)" stroke="var(--rule)"/>
+        <text x="666" y="184" text-anchor="middle" class="t" font-size="14" font-weight="600">Sensors</text>
+        <text x="666" y="204" text-anchor="middle" class="tm" font-size="11">IMU, GPS, baro (fake)</text>
+
+        <path d="M206 118H286" stroke="var(--accent)" stroke-width="2" marker-end="url(#ar)"/>
+        <path d="M286 152H206" stroke="var(--ink-3)" stroke-width="2" marker-end="url(#ar)"/>
+        <text x="246" y="110" text-anchor="middle" class="tm" font-size="10.5" style="fill:var(--accent)">requests</text>
+        <text x="246" y="170" text-anchor="middle" class="tm" font-size="10.5">state</text>
+        <text x="246" y="232" text-anchor="middle" class="tm" font-size="11.5" style="fill:var(--ink)">MAVLink</text>
+        <path d="M246 222V198" stroke="var(--rule)" stroke-dasharray="3 3"/>
+        <path d="M502 100H582" stroke="var(--ink-3)" stroke-width="2" marker-end="url(#ar)"/>
+        <path d="M582 190H502" stroke="var(--ink-3)" stroke-width="2" marker-end="url(#ar)"/>
+        <text x="380" y="270" text-anchor="middle" class="tm" font-size="12">Your code never sends a motor command. It sends requests, then reads state.</text>
+      </svg>
+      </div>
+    </figure>
+    <div class="card notes">
+      <h4>Two jobs, two speeds</h4>
+      <p>ArduPilot keeps the aircraft stable. It reads the sensors and changes the motor speeds many times each second.</p>
+      <p>Your script works at a higher level. It asks for a mode, for arming, or for a height. Then it reads the state that ArduPilot reports.</p>
+      <h4>Think of air traffic control</h4>
+      <p>A controller gives instructions to a pilot. The pilot can refuse an instruction. The controller then looks at the radar to see what the aircraft does.</p>
+      <h4>SITL</h4>
+      <p>In this lab, the motors and sensors are a physics model on your laptop. ArduPilot runs its real code. Your script sees no difference.</p>
+    </div>
+  </div>
+</section>
+
+<!-- B -->
+<section id="modes">
+  <div class="sec-head"><span class="n">B</span><h2>Flight modes: who is in charge</h2></div>
+  <div class="card">
+    <div class="modes" role="group" aria-label="Select a flight mode">
+      <button class="mode" type="button" data-m="STABILIZE" aria-pressed="false"><b>STABILIZE</b><span>custom_mode 0</span></button>
+      <button class="mode" type="button" data-m="GUIDED" aria-pressed="true"><b>GUIDED</b><span>custom_mode 4</span></button>
+      <button class="mode" type="button" data-m="LAND" aria-pressed="false"><b>LAND</b><span>custom_mode 9</span></button>
+      <button class="mode" type="button" data-m="AUTO" aria-pressed="false"><b>AUTO</b><span>custom_mode 3</span></button>
+    </div>
+    <div class="mode-detail" id="modeDetail" aria-live="polite"></div>
+  </div>
+  <div class="prose">
+    <p>A flight mode tells ArduPilot which rules to use. The mode decides who gives the targets: a human pilot, a script, or a stored mission. ArduPilot reports the current mode in every <code>HEARTBEAT</code>, in the <code>custom_mode</code> field.</p>
+    <p>A mode change is also a request. ArduPilot can refuse it. For example, a mode that needs a position estimate can refuse when the estimate is not good.</p>
+  </div>
+</section>
+
+<!-- C -->
+<section id="arming">
+  <div class="sec-head"><span class="n">C</span><h2>Arming and pre-arm checks</h2></div>
+  <div class="grid even">
+    <div class="card notes">
+      <h4>What arming means</h4>
+      <p>"Armed" means that the motors can turn. "Disarmed" means that the motors stay stopped. The armed flag is bit 128 (<code>MAV_MODE_FLAG_SAFETY_ARMED</code>) of <code>base_mode</code> in each <code>HEARTBEAT</code>.</p>
+      <h4>Pre-arm checks</h4>
+      <p>Before ArduPilot arms, it runs pre-arm checks. If one check fails, ArduPilot refuses to arm. Examples from the ArduPilot list: "Compass not calibrated", "Gyros not healthy", "Battery below minimum arming voltage".</p>
+      <p>ArduPilot sends the failure reason as a text message to the ground station. While the vehicle stays disarmed, it repeats failing checks about every 30 seconds.</p>
+      <h4>In SITL</h4>
+      <p>Right after start, the position estimate is not ready yet. So arming fails for some seconds. This is normal. Wait for the checks to pass.</p>
+    </div>
+    <div class="card notes">
+      <h4>After arming</h4>
+      <p>Arming does not make the drone fly. In GUIDED mode, your script sends a takeoff request after arming.</p>
+      <p>ArduPilot can disarm again by itself. For example, the Copter docs say that the motors disarm if the throttle stays at minimum for 15 seconds. After landing, <code>DISARM_DELAY</code> sets the delay before the automatic disarm.</p>
+      <h4>Lesson</h4>
+      <p>"Armed" is a state that can change at any time. Read it from the latest <code>HEARTBEAT</code>. Do not remember it from your last command.</p>
+      <h4>Where the reasons appear</h4>
+      <p>The reason text arrives in a <code>STATUSTEXT</code> message. The text often starts with "PreArm:". <span class="badge unv">UNVERIFIED</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- D -->
+<section id="mavlink">
+  <div class="sec-head"><span class="n">D</span><h2>MAVLink is a stream of small messages</h2></div>
+  <div class="grid">
+    <figure class="card">
+      <div class="fig flow">
+        <svg id="flow" viewBox="0 0 760 230" role="img" aria-labelledby="flowT">
+          <title id="flowT">Animated message flow between your script and ArduPilot</title>
+          <rect x="10" y="30" width="140" height="170" rx="12" fill="var(--panel-2)" stroke="var(--accent)" stroke-width="1.5"/>
+          <text x="80" y="60" text-anchor="middle" class="t" font-size="15" font-weight="600">Script</text>
+          <rect x="610" y="30" width="140" height="170" rx="12" fill="var(--panel-2)" stroke="var(--ink)" stroke-width="1.5"/>
+          <text x="680" y="60" text-anchor="middle" class="t" font-size="15" font-weight="600">ArduPilot</text>
+          <text x="380" y="68" text-anchor="middle" class="tm" font-size="11">script → autopilot</text>
+          <path d="M152 90H608" stroke="var(--rule)" stroke-width="22" stroke-linecap="round" opacity=".55"/>
+          <text x="380" y="176" text-anchor="middle" class="tm" font-size="11">autopilot → script</text>
+          <path d="M152 145H608" stroke="var(--rule)" stroke-width="22" stroke-linecap="round" opacity=".55"/>
+          <g id="packets"></g>
+          <text id="flowState" x="680" y="100" text-anchor="middle" class="tm" font-size="11.5">STABILIZE</text>
+          <text id="flowArm" x="680" y="120" text-anchor="middle" class="tm" font-size="11.5">DISARMED</text>
+          <text id="flowAlt" x="680" y="140" text-anchor="middle" class="tm" font-size="11.5">alt 0.00 m</text>
+          <text id="flowBelief" x="80" y="100" text-anchor="middle" class="tm" font-size="11">waiting for</text>
+          <text id="flowBelief2" x="80" y="118" text-anchor="middle" class="tm" font-size="11">HEARTBEAT</text>
+        </svg>
+      </div>
+      <div class="controls">
+        <button class="btn primary" id="flowPlay" type="button">▶ Play</button>
+        <button class="btn" id="flowReset" type="button">Reset</button>
+        <span class="mono" style="font-size:12.5px;color:var(--ink-3)">Select a log line to see what the message means.</span>
+      </div>
+      <div class="log" id="flowLog" aria-live="polite"></div>
+    </figure>
+    <div class="card notes">
+      <h4>Message meaning</h4>
+      <div id="msgInfo"><p>Push Play. The scene connects, waits for pre-arm, sets GUIDED and arms. Each packet appears in the log when it arrives.</p></div>
+      <h4>Rates in this animation</h4>
+      <p>The rates here are slow so that you can follow them. <span class="badge ill">ILLUSTRATIVE</span> On RF links, systems usually send <code>HEARTBEAT</code> at 1 Hz. A system that misses four or five heartbeats is usually treated as lost.</p>
+    </div>
+  </div>
+  <div class="prose">
+    <p>MAVLink has no "function call". Each side sends small typed packets. A packet goes out, and the sender gets no automatic result. The receiver can answer with another packet, but a packet can also get lost.</p>
+  </div>
+  <div class="scroll-x card" style="margin-top:12px">
+  <table class="t">
+    <thead><tr><th>Message</th><th>Direction</th><th>Fields you meet first</th></tr></thead>
+    <tbody>
+      <tr><td><code>HEARTBEAT</code></td><td>both ways</td><td><code>base_mode</code> (bit 128 = armed), <code>custom_mode</code> (ArduPilot flight mode number), <code>system_status</code></td></tr>
+      <tr><td><code>COMMAND_LONG</code></td><td>script → autopilot</td><td><code>command</code> (for example <code>MAV_CMD_COMPONENT_ARM_DISARM</code>, <code>MAV_CMD_NAV_TAKEOFF</code>, <code>MAV_CMD_DO_SET_MODE</code>), <code>param1</code>…<code>param7</code>, <code>confirmation</code></td></tr>
+      <tr><td><code>COMMAND_ACK</code></td><td>autopilot → script</td><td><code>command</code> (which command it answers), <code>result</code> (a <code>MAV_RESULT</code> value)</td></tr>
+      <tr><td><code>GLOBAL_POSITION_INT</code></td><td>autopilot → script</td><td><code>lat</code>, <code>lon</code> (degE7), <code>alt</code> (mm, MSL), <code>relative_alt</code> (mm above home), <code>vx</code>, <code>vy</code>, <code>vz</code> (cm/s, <code>vz</code> positive down), <code>hdg</code> (cdeg)</td></tr>
+      <tr><td><code>STATUSTEXT</code></td><td>autopilot → script</td><td><code>severity</code>, <code>text</code> (human-readable reason)</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="scroll-x card" style="margin-top:12px">
+  <table class="t">
+    <thead><tr><th>MAV_RESULT</th><th>Name</th><th>Meaning (short form of the MAVLink text)</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td><code>ACCEPTED</code></td><td>The command is valid and supported.</td></tr>
+      <tr><td>1</td><td><code>TEMPORARILY_REJECTED</code></td><td>The command is valid, but not possible now. Waiting can fix it.</td></tr>
+      <tr><td>2</td><td><code>DENIED</code></td><td>The command is supported, but one or more parameter values are not valid.</td></tr>
+      <tr><td>3</td><td><code>UNSUPPORTED</code></td><td>The receiver does not know the command.</td></tr>
+      <tr><td>4</td><td><code>FAILED</code></td><td>The command is valid, but the execution failed.</td></tr>
+      <tr><td>5</td><td><code>IN_PROGRESS</code></td><td>The command is valid and runs now. More ACKs follow.</td></tr>
+      <tr><td>6</td><td><code>CANCELLED</code></td><td>A <code>COMMAND_CANCEL</code> stopped the command.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- E -->
+<section id="toy">
+  <div class="sec-head"><span class="n">E</span><h2>Toy: send a command to a fake autopilot</h2></div>
+  <div class="prose">
+    <p>This fake autopilot is a toy. It is not ArduPilot. It sometimes loses a packet, sometimes refuses, and sometimes accepts but does not act. Use it to see why the ACK and the state can disagree.</p>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <div class="controls" style="border-top:0">
+        <span class="mono" style="font-size:12.5px;color:var(--ink-3)">Autopilot behaviour</span>
+        <button class="chip" type="button" data-beh="calm" aria-pressed="false">Calm</button>
+        <button class="chip" type="button" data-beh="real" aria-pressed="true">Normal</button>
+        <button class="chip" type="button" data-beh="hard" aria-pressed="false">Difficult</button>
+        <button class="btn" id="toyRestart" type="button">↺ Restart SITL</button>
+      </div>
+      <div class="controls">
+        <button class="btn" type="button" data-cmd="GUIDED">Set mode GUIDED</button>
+        <button class="btn" type="button" data-cmd="ARM">Arm</button>
+        <button class="btn" type="button" data-cmd="TAKEOFF">Take off to 5 m</button>
+        <button class="btn" type="button" data-cmd="LAND">Set mode LAND</button>
+      </div>
+      <div class="state">
+        <div class="box">
+          <h4>What the last ACK says</h4>
+          <dl><dt>command</dt><dd id="ackCmd">–</dd><dt>result</dt><dd id="ackRes">–</dd><dt>age</dt><dd id="ackAge">–</dd></dl>
+        </div>
+        <div class="box">
+          <h4>What the state says</h4>
+          <dl><dt>mode</dt><dd id="stMode">–</dd><dt>armed</dt><dd id="stArm">–</dd><dt>rel. alt</dt><dd id="stAlt">–</dd><dt>pre-arm</dt><dd id="stPre">–</dd></dl>
+        </div>
+      </div>
+      <div class="verdict" id="verdict" aria-live="polite">Send a command. Then compare the two boxes.</div>
+      <div class="log" id="toyLog" style="height:220px"></div>
+    </div>
+    <div class="card notes">
+      <h4>Things to try</h4>
+      <p>1. Push "Arm" right after a restart. Read the reason in the log.</p>
+      <p>2. Use "Difficult". Arm several times. Sometimes the ACK says ACCEPTED, but the state stays DISARMED.</p>
+      <p>3. Arm, then wait. The toy disarms on the ground after 10 seconds without a takeoff. <span class="badge ill">ILLUSTRATIVE</span></p>
+      <p>4. Take off. Look at the height values near the end. The value comes near 5 m, but it is not exactly 5.000.</p>
+      <h4>The rule</h4>
+      <p>A command is a request. The ACK tells you that ArduPilot received the request and its first answer. The state tells you what happened. Confirm from the state.</p>
+      <p>The MAVLink command docs say this directly: "accepted" means that the flight stack will attempt the action. It does not mean that the action is complete.</p>
+      <h4>Toy only</h4>
+      <p>The toy picks its result codes and timings for teaching. Real ArduPilot result codes for each case can be different. <span class="badge ill">ILLUSTRATIVE</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- F -->
+<section id="check">
+  <div class="sec-head"><span class="n">F</span><h2>Check yourself</h2></div>
+  <details class="q"><summary>1. Your script sends "arm" and gets no ACK. What do you know about the armed state?</summary><div>You know nothing new. The request or the ACK can be lost. Read the armed flag from the next <code>HEARTBEAT</code>. The MAVLink command protocol says that a sender re-sends a command when no ACK arrives.</div></details>
+  <details class="q"><summary>2. The ACK says ACCEPTED for a takeoff. Two seconds later, <code>relative_alt</code> is still 0. Is the takeoff done?</summary><div>No. ACCEPTED is only a first answer. The height value is the evidence. Think about how long you wait, and what your script reports if the height does not change.</div></details>
+  <details class="q"><summary>3. Which message tells you the flight mode, and which field?</summary><div><code>HEARTBEAT</code>, field <code>custom_mode</code>. For ArduCopter, GUIDED is 4 and LAND is 9.</div></details>
+  <details class="q"><summary>4. Why does arming fail for some seconds after SITL starts?</summary><div>The pre-arm checks need a healthy position estimate. The estimate needs some seconds to become ready. ArduPilot sends the reason as text.</div></details>
+  <details class="q"><summary>5. Why do you compare height against a threshold, not an exact value?</summary><div>Real and simulated values have small errors and small oscillations. A reading of 4.93 m is a normal "5 m". An exact compare can wait forever.</div></details>
+  <p class="no-sol">This page explains concepts only. It contains no mission.py logic. You write the state machine yourself in M1.</p>
+</section>
+
+<footer>
+  <b>Sources</b> (checked 2026-11-11)
+  <ul>
+    <li>MAVLink command protocol (ACK meaning, re-send without ACK): <a href="https://mavlink.io/en/services/command.html">mavlink.io/en/services/command.html</a></li>
+    <li>MAVLink common messages (HEARTBEAT, COMMAND_LONG, COMMAND_ACK, GLOBAL_POSITION_INT, MAV_RESULT, MAV_MODE_FLAG): <a href="https://mavlink.io/en/messages/common.html">mavlink.io/en/messages/common.html</a></li>
+    <li>MAVLink heartbeat (1 Hz typical, 4–5 missed = lost): <a href="https://mavlink.io/en/services/heartbeat.html">mavlink.io/en/services/heartbeat.html</a></li>
+    <li>COPTER_MODE numbers: <a href="https://mavlink.io/en/messages/ardupilotmega.html">mavlink.io/en/messages/ardupilotmega.html</a></li>
+    <li>ArduPilot flight modes: <a href="https://ardupilot.org/copter/docs/flight-modes.html">ardupilot.org/copter/docs/flight-modes.html</a> · LAND mode: <a href="https://ardupilot.org/copter/docs/land-mode.html">land-mode.html</a></li>
+    <li>Pre-arm checks: <a href="https://ardupilot.org/copter/docs/common-prearm-safety-checks.html">common-prearm-safety-checks.html</a> · Arming: <a href="https://ardupilot.org/copter/docs/arming_the_motors.html">arming_the_motors.html</a></li>
+    <li>GUIDED mode commands: <a href="https://ardupilot.org/dev/docs/copter-commands-in-guided-mode.html">copter-commands-in-guided-mode.html</a> · Parameters (DISARM_DELAY): <a href="https://ardupilot.org/copter/docs/parameters.html">parameters.html</a></li>
+  </ul>
+  <b>UNVERIFIED</b>: the "PreArm:" text prefix in STATUSTEXT; that GUIDED takeoff needs the vehicle armed first (normal practice, not found as a direct quote); the exact MAV_RESULT that ArduPilot returns for each refusal. <b>Note</b>: the MAV_RESULT_ACCEPTED enum text says "was executed", but the command protocol page says ACCEPTED does not mean completed. This page follows the protocol page.<br>
+  All timings and rates in the animation and the toy are ILLUSTRATIVE. Simulation-only learning material.
+</footer>
+</div>
+
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('pll-theme');if(s)r.setAttribute('data-theme',s);}catch(e){}b.addEventListener('click',function(){var c=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');var n=c==='dark'?'light':'dark';r.setAttribute('data-theme',n);try{localStorage.setItem('pll-theme',n);}catch(e){}document.dispatchEvent(new Event('themechange'));});})();</script>
+<script>
+(function(){
+  'use strict';
+  /* ---------- B. modes ---------- */
+  var MODES={
+    STABILIZE:{who:[100,0,0],t:'A human pilot flies with sticks. ArduPilot only keeps roll and pitch level.',pos:'No. STABILIZE does not need a position estimate.',lab:'Not used by scripts in this lab. It needs a pilot on the sticks.'},
+    GUIDED:{who:[0,100,0],t:'ArduPilot flies to single targets that a ground station or a script sends.',pos:'Yes. GUIDED needs a good position estimate.',lab:'M1: your mission.py uses GUIDED for takeoff and hold.'},
+    LAND:{who:[0,15,85],t:'ArduPilot descends and tries to go straight down. On the ground, it stops the motors and disarms.',pos:'Better with one. Precision landing works in LAND mode.',lab:'M1 ends in LAND. M3 uses LAND with precision landing.'},
+    AUTO:{who:[0,0,100],t:'ArduPilot flies a mission that is stored on the autopilot, item by item.',pos:'Yes. AUTO needs a good position estimate.',lab:'Not used in M1. The lab uses GUIDED and LAND first.'}
+  };
+  var md=document.getElementById('modeDetail');
+  function showMode(m){
+    var d=MODES[m];
+    document.querySelectorAll('.mode').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.m===m?'true':'false');});
+    md.innerHTML='<p><b class="mono">'+m+'</b>: '+d.t+'</p>'+
+      '<div class="meter" aria-hidden="true"><i style="width:'+d.who[0]+'%;background:var(--warn)"></i><i style="width:'+d.who[1]+'%;background:var(--accent)"></i><i style="width:'+d.who[2]+'%;background:var(--ok)"></i></div>'+
+      '<p class="mono" style="font-size:12px;color:var(--ink-3)">targets from: <span style="color:var(--warn)">■ pilot</span> <span style="color:var(--accent)">■ script</span> <span style="color:var(--ok)">■ autopilot logic or mission</span> (rough picture)</p>'+
+      '<p><b>Position estimate needed?</b> '+d.pos+'</p><p><b>In this lab:</b> '+d.lab+'</p>';
+  }
+  document.querySelectorAll('.mode').forEach(function(b){b.addEventListener('click',function(){showMode(b.dataset.m);});});
+  showMode('GUIDED');
+
+  /* ---------- D. message flow animation ---------- */
+  var NS='http://www.w3.org/2000/svg';
+  var INFO={
+    HEARTBEAT:'<p><b>HEARTBEAT</b> says "I am alive". The autopilot version also carries the mode (<code>custom_mode</code>) and the armed bit (bit 128 of <code>base_mode</code>). Your script sends its own heartbeat too.</p>',
+    COMMAND_LONG:'<p><b>COMMAND_LONG</b> carries one command and seven parameters. Here it asks for a mode change or for arming. It is a request.</p>',
+    COMMAND_ACK:'<p><b>COMMAND_ACK</b> answers one command. Its <code>result</code> field is a <code>MAV_RESULT</code> value. ACCEPTED is not proof that the action is complete.</p>',
+    GLOBAL_POSITION_INT:'<p><b>GLOBAL_POSITION_INT</b> carries the position. <code>relative_alt</code> is height above home in millimetres, positive up. <code>vz</code> is positive down.</p>',
+    STATUSTEXT:'<p><b>STATUSTEXT</b> carries a human-readable line. Here it explains why the autopilot is not ready.</p>'
+  };
+  var SCRIPT=[
+    [0.0,'in','HEARTBEAT','mode=STABILIZE armed=0'],
+    [0.6,'out','HEARTBEAT','type=GCS'],
+    [1.2,'in','GLOBAL_POSITION_INT','relative_alt=12 mm'],
+    [2.0,'in','STATUSTEXT','"waiting for position estimate" (toy text)'],
+    [2.6,'in','HEARTBEAT','mode=STABILIZE armed=0'],
+    [3.6,'in','GLOBAL_POSITION_INT','relative_alt=9 mm'],
+    [4.6,'in','HEARTBEAT','mode=STABILIZE armed=0'],
+    [5.4,'out','COMMAND_LONG','MAV_CMD_DO_SET_MODE → GUIDED'],
+    [6.4,'in','COMMAND_ACK','DO_SET_MODE result=ACCEPTED',function(s){s.belief='ACK: mode OK';}],
+    [6.8,'in','HEARTBEAT','mode=GUIDED armed=0',function(s){s.mode='GUIDED';s.belief='state: GUIDED';}],
+    [7.8,'out','COMMAND_LONG','MAV_CMD_COMPONENT_ARM_DISARM param1=1'],
+    [8.8,'in','COMMAND_ACK','ARM_DISARM result=ACCEPTED',function(s){s.belief='ACK: arm OK';}],
+    [9.3,'in','HEARTBEAT','mode=GUIDED armed=1',function(s){s.armed=true;s.belief='state: ARMED';}],
+    [10.2,'in','GLOBAL_POSITION_INT','relative_alt=10 mm'],
+    [11.2,'in','HEARTBEAT','mode=GUIDED armed=1']
+  ];
+  var pk=document.getElementById('packets'), flog=document.getElementById('flowLog'), info=document.getElementById('msgInfo');
+  var fState, fT, fIdx, fPlaying=false, fLast=0, live=[];
+  function fReset(){fState={mode:'STABILIZE',armed:false,belief:'waiting for'};fT=0;fIdx=0;live=[];pk.innerHTML='';flog.innerHTML='';fDraw();setPlay(false);}
+  function setPlay(p){fPlaying=p;document.getElementById('flowPlay').textContent=p?'❚❚ Pause':'▶ Play';if(p){fLast=performance.now();requestAnimationFrame(fTick);}}
+  function mkPacket(dir,name){
+    var g=document.createElementNS(NS,'g'); var w=Math.max(96,name.length*7.6+16);
+    var r=document.createElementNS(NS,'rect'); r.setAttribute('width',w);r.setAttribute('height',20);r.setAttribute('rx',6);r.setAttribute('y',-10);r.setAttribute('x',-w/2);
+    r.setAttribute('fill',dir==='out'?'var(--accent)':'var(--ink)');
+    var t=document.createElementNS(NS,'text');t.setAttribute('text-anchor','middle');t.setAttribute('y',4);t.setAttribute('font-size','11');t.setAttribute('fill','var(--bg)');t.textContent=name;
+    g.appendChild(r);g.appendChild(t);pk.appendChild(g);return g;
+  }
+  function logLine(el,cls,name,txt,t){
+    var d=document.createElement('div');d.className=cls;d.textContent=(t!=null?('t='+t.toFixed(1)+'s  '):'')+(cls.indexOf('out')>=0?'→ ':'← ')+name+'  '+txt;
+    d.dataset.msg=name;el.appendChild(d);while(el.children.length>200)el.removeChild(el.firstChild);el.scrollTop=el.scrollHeight;return d;
+  }
+  flog.addEventListener('click',function(e){var m=e.target.dataset&&e.target.dataset.msg;if(m&&INFO[m])info.innerHTML=INFO[m];});
+  var TRAVEL=0.9;
+  function fTick(now){
+    if(!fPlaying)return;
+    var dt=Math.min(.1,(now-fLast)/1000);fLast=now;fT+=dt;
+    while(fIdx<SCRIPT.length&&SCRIPT[fIdx][0]<=fT){var s=SCRIPT[fIdx++];live.push({s:s,t0:s[0],g:mkPacket(s[1],s[2])});}
+    live=live.filter(function(p){
+      var k=(fT-p.t0)/TRAVEL;
+      if(k>=1){pk.removeChild(p.g);var s=p.s;if(s[4])s[4](fState);logLine(flog,s[1]+(s[2]==='STATUSTEXT'?' warn':''),s[2],s[3],s[0]+TRAVEL);if(INFO[s[2]])info.innerHTML=INFO[s[2]];fDraw();return false;}
+      var x=p.s[1]==='out'?170+k*420:590-k*420, y=p.s[1]==='out'?90:145;
+      p.g.setAttribute('transform','translate('+x+','+y+')');return true;
+    });
+    if(fIdx>=SCRIPT.length&&!live.length){setPlay(false);return;}
+    requestAnimationFrame(fTick);
+  }
+  function fDraw(){
+    document.getElementById('flowState').textContent=fState.mode;
+    var a=document.getElementById('flowArm');a.textContent=fState.armed?'ARMED':'DISARMED';a.style.fill=fState.armed?'var(--ok)':'var(--ink-2)';
+    var parts=fState.belief.split(': ');document.getElementById('flowBelief').textContent=parts.length>1?parts[0]+':':parts[0];
+    document.getElementById('flowBelief2').textContent=parts.length>1?parts[1]:'HEARTBEAT';
+  }
+  document.getElementById('flowPlay').addEventListener('click',function(){if(fIdx>=SCRIPT.length&&!live.length)fReset();setPlay(!fPlaying);});
+  document.getElementById('flowReset').addEventListener('click',fReset);
+  fReset();
+
+  /* ---------- E. toy autopilot (teaching toy, not ArduPilot behaviour) ---------- */
+  var BEH={calm:{loss:0,lie:0,tmp:0},real:{loss:.08,lie:.08,tmp:.05},hard:{loss:.2,lie:.3,tmp:.15}};
+  var beh='real', tlog=document.getElementById('toyLog');
+  var ap, clock=0, pending=[], lastAck=null, lastCmd=null, hbT=0, gpT=0, rnd=Math.random;
+  function restart(){
+    ap={mode:'STABILIZE',armed:false,alt:0,target:null,climb:0,readyAt:8+rnd()*3,armedAt:null,flying:false,landing:false,stuck:false};
+    clock=0;pending=[];lastAck=null;lastCmd=null;tlog.innerHTML='';
+    tl('in warn','STATUSTEXT','"SITL start: pre-arm checks running" (toy)');
+    render();
+  }
+  function tl(c,n,t){logLine(tlog,c,n,t,clock);}
+  function later(dt,fn){pending.push({at:clock+dt,fn:fn});}
+  function ack(cmd,res){
+    later(.35+rnd()*.3,function(){
+      lastAck={cmd:cmd,res:res,t:clock};
+      tl('in '+(res==='ACCEPTED'?'ok':'bad'),'COMMAND_ACK',cmd+' result='+res);render();
+    });
+  }
+  function send(kind){
+    var names={GUIDED:'DO_SET_MODE GUIDED',ARM:'COMPONENT_ARM_DISARM 1',TAKEOFF:'NAV_TAKEOFF 5 m',LAND:'DO_SET_MODE LAND'};
+    var cmd=names[kind]; lastCmd={kind:kind,t:clock};
+    tl('out','COMMAND_LONG',cmd);
+    var b=BEH[beh];
+    if(rnd()<b.loss){later(1.5,function(){if(!lastAck||lastAck.t<lastCmd.t){tl('bad','(no reply)','no COMMAND_ACK after 1.5 s: the packet was lost (toy)');render();}});render();return;}
+    if((ap.flying&&ap.alt<4.7&&kind==='TAKEOFF')||rnd()<b.tmp){ack(cmd,'TEMPORARILY_REJECTED');render();return;}
+    if(kind==='GUIDED'){
+      if(clock<ap.readyAt*0.5){ack(cmd,'FAILED');later(.5,function(){tl('in warn','STATUSTEXT','"position estimate not ready" (toy)');});}
+      else{ack(cmd,'ACCEPTED');later(.9,function(){ap.mode='GUIDED';});}
+    }else if(kind==='ARM'){
+      if(ap.armed){ack(cmd,'ACCEPTED');}
+      else if(clock<ap.readyAt){ack(cmd,'FAILED');later(.5,function(){tl('in warn','STATUSTEXT','"PreArm: position estimate not ready" (toy text)');});}
+      else if(ap.mode!=='GUIDED'&&ap.mode!=='STABILIZE'){ack(cmd,'DENIED');}
+      else{
+        ack(cmd,'ACCEPTED');
+        if(rnd()<b.lie){later(.9,function(){ap.armed=true;ap.armedAt=clock;});later(2.2,function(){ap.armed=false;tl('in warn','STATUSTEXT','"disarmed: motor check" (toy reason)');});}
+        else later(.9,function(){ap.armed=true;ap.armedAt=clock;});
+      }
+    }else if(kind==='TAKEOFF'){
+      if(ap.mode!=='GUIDED'||!ap.armed){ack(cmd,'FAILED');}
+      else{
+        ack(cmd,'ACCEPTED');
+        if(rnd()<b.lie){ap.stuck=true;}
+        else later(.6,function(){ap.flying=true;ap.target=4.86+rnd()*.22;});
+      }
+    }else if(kind==='LAND'){
+      if(!ap.armed){ack(cmd,'ACCEPTED');later(.9,function(){ap.mode='LAND';});}
+      else{ack(cmd,'ACCEPTED');later(.9,function(){ap.mode='LAND';ap.landing=true;});}
+    }
+    render();
+  }
+  function step(dt){
+    clock+=dt;
+    pending.sort(function(a,b){return a.at-b.at;});
+    while(pending.length&&pending[0].at<=clock)pending.shift().fn();
+    if(ap.flying&&!ap.landing&&ap.target!=null){var e=ap.target-ap.alt;ap.alt+=Math.max(-1,Math.min(1,e*1.2))*dt;ap.alt+=(rnd()-.5)*.02;}
+    if(ap.landing&&ap.armed){ap.alt=Math.max(0,ap.alt-0.5*dt);if(ap.alt<=0.02){ap.alt=0;ap.flying=false;ap.landing=false;later(2,function(){ap.armed=false;tl('in','STATUSTEXT','"landed, disarmed" (toy)');});ap.landing=null;}}
+    if(ap.armed&&!ap.flying&&ap.mode==='GUIDED'&&ap.armedAt!=null&&clock-ap.armedAt>10){ap.armed=false;ap.stuck=false;tl('in warn','STATUSTEXT','"auto disarm: no takeoff" (toy, 10 s)');}
+    hbT+=dt;gpT+=dt;
+    if(hbT>=1){hbT=0;tl('in','HEARTBEAT','mode='+ap.mode+' armed='+(ap.armed?1:0));}
+    if(gpT>=2){gpT=0;tl('in','GLOBAL_POSITION_INT','relative_alt='+Math.round(ap.alt*1000)+' mm');}
+    render();
+  }
+  function render(){
+    var a=lastAck;
+    document.getElementById('ackCmd').textContent=a?a.cmd:'–';
+    var r=document.getElementById('ackRes');r.textContent=a?a.res:'–';r.style.color=a?(a.res==='ACCEPTED'?'var(--ok)':'var(--bad)'):'';
+    document.getElementById('ackAge').textContent=a?((clock-a.t).toFixed(1)+' s ago'):'–';
+    document.getElementById('stMode').textContent=ap.mode;
+    var s=document.getElementById('stArm');s.textContent=ap.armed?'ARMED':'DISARMED';s.style.color=ap.armed?'var(--ok)':'';
+    document.getElementById('stAlt').textContent=(Math.max(0,ap.alt)).toFixed(2)+' m';
+    var p=document.getElementById('stPre');p.textContent=clock>=ap.readyAt?'pass':'running ('+Math.max(0,ap.readyAt-clock).toFixed(0)+' s)';p.style.color=clock>=ap.readyAt?'var(--ok)':'var(--warn)';
+    var v=document.getElementById('verdict');v.className='verdict';
+    if(!lastCmd){v.textContent='Send a command. Then compare the two boxes.';return;}
+    var k=lastCmd.kind, age=clock-lastCmd.t, ok=null;
+    if(k==='GUIDED')ok=ap.mode==='GUIDED';else if(k==='ARM')ok=ap.armed;else if(k==='TAKEOFF')ok=ap.alt>4.5;else if(k==='LAND')ok=ap.mode==='LAND';
+    var acked=a&&a.t>=lastCmd.t;
+    if(!acked&&age<1.5){v.textContent='Request sent. No answer yet.';return;}
+    if(!acked){v.className='verdict mismatch';v.textContent='No ACK. You do not know if ArduPilot got the request. The state is the only evidence: '+(ok?'it shows the change.':'it shows no change.');return;}
+    if(a.res!=='ACCEPTED'){v.className='verdict match';v.textContent='Refused ('+a.res+'). The state also shows no change. Read the log for a reason.';return;}
+    if(ok){v.className='verdict match';v.textContent='ACK says ACCEPTED, and the state now agrees.';}
+    else if(age<(k==='TAKEOFF'?6:2.5)){v.textContent='ACK says ACCEPTED. The state does not agree yet. Some actions need time.';}
+    else{v.className='verdict mismatch';v.textContent='ACK says ACCEPTED, but the state still disagrees after '+age.toFixed(1)+' s. The ACK is not proof.';}
+  }
+  document.querySelectorAll('[data-cmd]').forEach(function(b){b.addEventListener('click',function(){send(b.dataset.cmd);});});
+  document.querySelectorAll('[data-beh]').forEach(function(b){b.addEventListener('click',function(){beh=b.dataset.beh;document.querySelectorAll('[data-beh]').forEach(function(c){c.setAttribute('aria-pressed',c===b?'true':'false');});});});
+  document.getElementById('toyRestart').addEventListener('click',restart);
+  restart();
+  var tl0=performance.now();
+  (function loop(now){var dt=Math.min(.2,(now-tl0)/1000);tl0=now;if(document.visibilityState!=='hidden')step(dt);requestAnimationFrame(loop);})(tl0);
+})();
+</script>
+</body>
+</html>
