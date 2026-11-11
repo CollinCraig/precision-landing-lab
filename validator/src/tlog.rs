@@ -34,8 +34,8 @@ pub fn validate(path: &Path, start: u64, end: u64) -> Result<Stats, String> {
         if prefix[0] == 0xfd && data[1] != 0 { return Err("flight.tlog: signed/unknown MAVLink incompatibility flags unsupported in M1".into()); }
         let id = if header_len == 5 { data[4] as u32 } else { u32::from_le_bytes([data[6], data[7], data[8], 0]) };
         let identity = if header_len == 5 { (data[2], data[3]) } else { (data[4], data[5]) };
-        if identity.0 == 0 || identity.1 == 0 || vehicle.is_some_and(|v| v != identity) {
-            return Err("flight.tlog: expected one nonzero system/component identity".into());
+        if identity != (1, 1) || vehicle.is_some_and(|v| v != identity) {
+            return Err("flight.tlog: expected Copter system/component identity 1/1".into());
         }
         vehicle = Some(identity);
         let (length, extra) = match id { 0 => (9, 50), 33 => (28, 104), _ => return Err(format!("flight.tlog: message {id} unsupported; writer must filter M1 stream")) };
@@ -44,7 +44,13 @@ pub fn validate(path: &Path, start: u64, end: u64) -> Result<Stats, String> {
         let mut checksum = [0u8; 2];
         read(&mut f, &mut checksum)?;
         if u16::from_le_bytes(checksum) != crc(&data, extra) { return Err(format!("flight.tlog record {}: MAVLink checksum mismatch", stats.records)); }
-        if id == 0 { stats.heartbeat = true; }
+        if id == 0 {
+            let payload = &data[header_len..];
+            if payload.len() < 9 || payload[4] != 2 || payload[5] != 3 || payload[8] != 3 {
+                return Err("flight.tlog: expected ArduPilot quadrotor HEARTBEAT with MAVLink version 3".into());
+            }
+            stats.heartbeat = true;
+        }
         if id == 33 {
             let mut payload = [0u8; 28];
             payload[..data.len() - header_len].copy_from_slice(&data[header_len..]);

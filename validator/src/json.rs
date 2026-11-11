@@ -19,7 +19,7 @@ mod tests {
         let v = parse(br#"{"value":"\uD83D\uDE80","array":[null,true,false,-1.25e+2]}"#).unwrap();
         let Value::Object(o) = v else { panic!("expected object") };
         assert!(matches!(&o["value"], Value::String(s) if s == "🚀"));
-        for bad in [r#""\uDC00""#, r#""\uD800\u0041""#, "[1,]", "[.1]", "[1.]", "[1e]", "[-]", "[01]", "[true false]"] {
+        for bad in [r#""\u+041""#, r#""\uDC00""#, r#""\uD800\u0041""#, "[1,]", "[.1]", "[1.]", "[1e]", "[-]", "[01]", "[true false]"] {
             assert!(parse(bad.as_bytes()).is_err(), "accepted {bad}");
         }
         assert!(parse(format!("{}0{}", "[".repeat(34), "]".repeat(34)).as_bytes()).is_err());
@@ -110,6 +110,7 @@ impl Parser<'_> {
     fn hex(&mut self) -> Result<u32, String> {
         let end = self.i + 4;
         let s = self.s.get(self.i..end).ok_or("truncated Unicode escape")?;
+        if !s.bytes().all(|c| c.is_ascii_hexdigit()) { return Err("bad Unicode escape".into()); }
         let n = u32::from_str_radix(s, 16).map_err(|_| "bad Unicode escape")?;
         self.i = end;
         Ok(n)

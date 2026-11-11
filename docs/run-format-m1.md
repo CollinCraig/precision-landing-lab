@@ -22,7 +22,7 @@ needed for its synthetic integration tests.
 | --- | --- | --- |
 | 0 | `VALID: mission reported success` | Structurally valid evidence with `success: true`. |
 | 1 | `VALID FAILURE:` | Structurally valid evidence with `success: false`; **never a demo pass**. |
-| 1 | `INVALID:` | Missing, malformed, unsupported, truncated, or inconsistent evidence. |
+| 3 | `INVALID:` | Missing, malformed, unsupported, truncated, or inconsistent evidence. |
 | 2 | `usage:` | Incorrect CLI arguments; exactly `plv check RUN_DIR` is supported. |
 
 Success goes to stdout; failures and usage go to stderr. Validation stops at
@@ -173,8 +173,7 @@ MAVLink 2 uses a 9-byte header after magic, payload length 1..9/1..28
 (legal zero-tail truncation is reconstructed for decoding), and the same CRC.
 CRC includes header after magic and payload followed by dialect CRC_EXTRA
 50/104 for messages 0/33. Signed packets and any nonzero incompatibility
-flags are unsupported and rejected. All records must have the same nonzero
-system/component IDs. Packet sequence numbers may have gaps because of
+flags are unsupported and rejected. All records must use default SITL vehicle system/component IDs 1/1. Packet sequence numbers may have gaps because of
 filtering. Unknown message IDs, invalid lengths, bad magic/CRC, partial
 timestamps/headers/payloads/CRCs, and trailing garbage are rejected.
 
@@ -209,3 +208,21 @@ rejection, event ordering/bounds/lifecycle, every byte truncation of a valid
 tlog, record count mismatch, corrupted CRC, timestamp bounds, boot rollback,
 MAVLink 1/2, and missing success telemetry. Tests verify evidence plumbing;
 they contain no mission implementation or acceptance solution.
+
+## Review clarifications
+
+CLI exit codes: 0 means structurally valid reported success (not flight
+acceptance), 1 means valid evidence of a failed mission, 2 means usage error,
+and 3 means invalid evidence. Use the exit code to distinguish these cases.
+Camera mode requires a declared `camera` input and forbids `truth` inputs.
+M1 filtered tlogs require the default SITL vehicle system/component 1/1,
+quadrotor type 2, ArduPilot autopilot 3, and MAVLink version field 3 in HEARTBEAT.
+GCS heartbeats cannot satisfy this evidence requirement. Empty tlogs cannot
+accompany autopilot-sourced events. This is a coarse evidence consistency
+check; events are not a packet-by-packet transcript, and one heartbeat plus a
+position packet does not prove altitude, hold, landing or disarm acceptance.
+The writer must separately establish those mission conditions.
+
+Validate completed, quiescent run directories. File-type checks and reads are
+separate operations; concurrent replacement is outside this local validator's
+trust model. Do not validate a directory being modified by another process.

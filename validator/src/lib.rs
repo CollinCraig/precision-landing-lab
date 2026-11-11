@@ -62,6 +62,7 @@ pub fn check(dir: &Path) -> R<bool> {
     let sources = array(&m["input_sources"], "manifest.input_sources")?;
     if sources.is_empty() { return Err("manifest.input_sources: must declare inputs".into()); }
     for s in sources { source(s, camera, "manifest.input_sources")?; }
+    if camera && !sources.iter().any(|s| matches!(s, Value::String(s) if s == "camera")) { return Err("manifest.input_sources: camera mode requires camera input".into()); }
     let versions = object(&m["versions"], &["ardupilot", "container"], "manifest.versions")?;
     string(&versions["ardupilot"], "manifest.versions.ardupilot")?;
     let image = string(&versions["container"], "manifest.versions.container")?;
@@ -120,6 +121,7 @@ pub fn check(dir: &Path) -> R<bool> {
     if stats.records != count { return Err("flight.tlog: record count differs from result.tlog_records".into()); }
     if count > 0 && !sources.iter().any(|s| matches!(s, Value::String(s) if s == "autopilot")) { return Err("flight.tlog: autopilot input not declared in manifest".into()); }
     if success && (!stats.heartbeat || !stats.position) { return Err("flight.tlog: success requires HEARTBEAT and GLOBAL_POSITION_INT".into()); }
+    if count == 0 && events.iter().any(|e| matches!(e, Value::Object(o) if matches!(&o["source"], Value::String(s) if s == "autopilot"))) { return Err("result.events: autopilot event without telemetry evidence".into()); }
     if count == 0 && !matches!(reason, Some("connection_failed" | "ac_unavailable" | "runner_error" | "interrupted")) { return Err("flight.tlog: empty evidence allowed only for pre-telemetry failure".into()); }
     Ok(success)
 }

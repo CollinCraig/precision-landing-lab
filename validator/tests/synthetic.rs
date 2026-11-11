@@ -56,7 +56,7 @@ fn checksum(bytes: &[u8], extra: u8) -> u16 {
 }
 fn record(t: u64, id: u8, v2: bool, boot: u32) -> Vec<u8> {
     let mut payload = vec![0u8; if id == 0 { 9 } else { 28 }];
-    if id == 0 { payload[8] = 3; } else { payload[..4].copy_from_slice(&boot.to_le_bytes()); }
+    if id == 0 { payload[4] = 2; payload[5] = 3; payload[8] = 3; } else { payload[..4].copy_from_slice(&boot.to_le_bytes()); }
     // MAVLink 2 legally elides zero payload suffixes.
     if v2 { while payload.len() > 1 && payload.last() == Some(&0) { payload.pop(); } }
     let mut data = if v2 { vec![payload.len() as u8, 0, 0, 0, 1, 1, id, 0, 0] }
@@ -93,6 +93,8 @@ fn early_failure_empty_log_is_explicit() {
     let run = Run::new(); run.failure("connection_failed");
     run.replace("result.json", "\"tlog_records\":2", "\"tlog_records\":0");
     fs::write(run.0.join("flight.tlog"), []).unwrap();
+    run.invalid("autopilot event without telemetry");
+    run.replace("result.json", "\"source\":\"autopilot\"", "\"source\":\"runner\"");
     assert_eq!(run.check().unwrap(), false);
     run.replace("result.json", "connection_failed", "timeout");
     run.invalid("empty evidence");
@@ -153,7 +155,9 @@ fn camera_truth_rejected_and_clean_camera_allowed() {
     let run = Run::new();
     for name in ["manifest.json", "result.json"] { run.replace(name, "\"mode\":\"truth\"", "\"mode\":\"camera\""); }
     run.invalid("truth input forbidden");
-    run.replace("manifest.json", ",\"truth\"", ",\"camera\"");
+    run.replace("manifest.json", ",\"truth\"", "");
+    run.invalid("camera mode requires camera input");
+    run.replace("manifest.json", "\"autopilot\"]", "\"autopilot\",\"camera\"]");
     assert!(run.check().unwrap());
     run.replace("result.json", "\"source\":\"autopilot\"", "\"source\":\"truth\"");
     run.invalid("truth input forbidden");
@@ -218,4 +222,22 @@ fn cli_usage_and_invalid_evidence() {
     let run = Run::new(); run.write("result.json", "{");
     let output = Command::new(env!("CARGO_BIN_EXE_plv")).arg("check").arg(&run.0).output().unwrap();
     assert_eq!(output.status.code(), Some(1)); assert!(String::from_utf8_lossy(&output.stderr).contains("INVALID:"));
+}
+
+#[test]
+fn invalid_evidence_has_distinct_exit() {
+    let run = Run::new(); run.write("manifest.json", "{}");
+    let output = Command::new(env!("CARGO_BIN_EXE_plv")).arg("check").arg(&run.0).output().unwrap();
+    assert_eq!(output.status.code(), Some(3));
+}
+#[test]
+fn gcs_heartbeat_is_rejected() {
+    let run = Run::new();
+    let mut data = record(START, 0, false, 0);
+    data[9 + 5 + 4] = 6; // HEARTBEAT MAV_TYPE_GCS, recompute CRC.
+    let crc = checksum(&data[9..data.len()-2], 50);
+    let n = data.len(); data[n-2..].copy_from_slice(&crc.to_le_bytes());
+    data.extend(record(START + 1, 33, false, 1));
+    fs::write(run.0.join("flight.tlog"), data).unwrap();
+    run.invalid("expected ArduPilot quadrotor HEARTBEAT");
 }

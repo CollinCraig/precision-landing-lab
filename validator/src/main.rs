@@ -13,7 +13,7 @@ fn main() {
         Err(e) => {
             let short: String = e.chars().take(240).map(|c| if c.is_control() { ' ' } else { c }).collect();
             eprintln!("INVALID: {short}");
-            std::process::exit(1);
+            std::process::exit(3);
         }
     }
 }
