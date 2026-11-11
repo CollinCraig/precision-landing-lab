@@ -57,6 +57,39 @@ def stub_problems(source):
     return problems
 
 
+READ_ONLY_GIT = {("worktree", "list", "--porcelain", "-z"), ("rev-parse", "--git-common-dir")}
+
+
+@contextlib.contextmanager
+def no_writes(testcase):
+    """Make every filesystem write fail, and allow only the read-only Git calls of the guard."""
+    def blocked(*args, **kwargs):
+        raise AssertionError(f"write before the guard: {args!r}")
+
+    real_git = learn_cli.git
+
+    def guarded_git(*args, **kwargs):
+        testcase.assertIn(tuple(args), READ_ONLY_GIT, "only read-only Git calls may run before the guard")
+        return real_git(*args, **kwargs)
+
+    real_open = open
+
+    def guarded_open(file, mode="r", *args, **kwargs):
+        if any(flag in mode for flag in "wax+"):
+            blocked(file, mode)
+        return real_open(file, mode, *args, **kwargs)
+
+    with contextlib.ExitStack() as stack:
+        for target, name in ((Path, "mkdir"), (Path, "write_text"), (Path, "write_bytes"), (Path, "touch"),
+                             (Path, "rename"), (Path, "replace"), (Path, "symlink_to"), (os, "mkdir"),
+                             (os, "makedirs"), (os, "rename"), (os, "replace"), (learn_cli.shutil, "copytree"),
+                             (learn_cli.shutil, "copy"), (learn_cli.shutil, "copy2"), (learn_cli.shutil, "move")):
+            stack.enter_context(patch.object(target, name, side_effect=blocked))
+        stack.enter_context(patch("builtins.open", side_effect=guarded_open))
+        stack.enter_context(patch.object(learn_cli, "git", side_effect=guarded_git))
+        yield
+
+
 class LearnCliTests(unittest.TestCase):
     def new_pilot(self):
         root = tempfile.TemporaryDirectory()
@@ -118,14 +151,11 @@ class LearnCliTests(unittest.TestCase):
             link.symlink_to(learn_cli.PLATFORM_ROOT)
             candidates = (inside, inside / "deeper", link / "via-link", learn_cli.PLATFORM_ROOT,
                           learn_cli.PLATFORM_ROOT / "docs" / ".." / "elsewhere")
-            with patch.object(learn_cli, "git", wraps=learn_cli.git) as git_call, \
-                    patch.object(learn_cli.shutil, "copytree") as copy:
+            with no_writes(self):
                 for target in candidates:
                     code, out = learn("--pilot", str(target), "init")
                     self.assertEqual(code, 1, target)
                     self.assertIn("inside the platform repository", out)
-                self.assertFalse(copy.called)
-                self.assertFalse([c for c in git_call.call_args_list if c.args[0] in ("init", "add", "commit")])
         self.assertFalse(inside.exists())
         self.assertFalse((learn_cli.PLATFORM_ROOT / "elsewhere").exists())
 
@@ -139,19 +169,31 @@ class LearnCliTests(unittest.TestCase):
                 "--allow-empty", "-m", "seed")
             bare = root / "common.git"  # the common Git directory sits outside both checkouts
             git(root, "clone", "-q", "--bare", str(seed), str(bare))
-            first, second = root / "checkout-a", root / "checkout-b"
+            first, second = root / "checkout-a", root / "checkout\nb"  # a line break in a worktree path
             git(bare, "worktree", "add", "-q", "--detach", str(first), "HEAD")
             git(bare, "worktree", "add", "-q", "--detach", str(second), "HEAD")
             targets = (second / "pilot", second / "deeper" / "pilot", bare / "pilot", bare / "worktrees" / "x")
-            with patch.object(learn_cli, "PLATFORM_ROOT", first), \
-                    patch.object(learn_cli.shutil, "copytree") as copy, \
-                    patch.object(Path, "mkdir") as mkdir:
-                for target in targets:
-                    code, out = learn("--pilot", str(target), "init")
-                    self.assertEqual(code, 1, target)
-                    self.assertIn("inside the platform repository", out)
-                self.assertFalse(copy.called or mkdir.called)
+            with patch.object(learn_cli, "PLATFORM_ROOT", first):
+                with no_writes(self):
+                    for target in targets:
+                        code, out = learn("--pilot", str(target), "init")
+                        self.assertEqual(code, 1, target)
+                        self.assertIn("inside the platform repository", out)
                 self.assertFalse(learn_cli.inside_platform(root / "outside" / "pilot"))  # outside every root
+
+    def test_no_writes_catches_a_write_before_the_guard(self):
+        """Self-test: a mutation that writes before the guard must fail the refusal tests."""
+        real_guard = learn_cli.inside_platform
+
+        def write_first(dest):
+            (Path(tempfile.gettempdir()) / "landing-lab-mutation-probe").mkdir(exist_ok=True)
+            return real_guard(dest)
+
+        with patch.object(learn_cli, "inside_platform", side_effect=write_first):
+            with self.assertRaises(AssertionError), no_writes(self):
+                learn("--pilot", str(learn_cli.PLATFORM_ROOT / "pilot"), "init")
+        with self.assertRaises(AssertionError), no_writes(self):
+            learn_cli.git("commit", "-q", cwd=learn_cli.PLATFORM_ROOT)  # not a read-only call
 
     def test_init_does_not_overwrite_a_folder_filled_during_the_copy(self):
         with tempfile.TemporaryDirectory() as root:

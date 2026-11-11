@@ -75,9 +75,10 @@ def platform_roots():
     """
     roots = {PLATFORM_ROOT.resolve()}
     try:
-        for line in git("worktree", "list", "--porcelain", cwd=PLATFORM_ROOT).stdout.splitlines():
-            if line.startswith("worktree "):
-                roots.add(Path(line[len("worktree "):]).resolve())
+        # -z ends each field with NUL, so a path that contains a line break stays whole.
+        for field in git("worktree", "list", "--porcelain", "-z", cwd=PLATFORM_ROOT).stdout.split("\0"):
+            if field.startswith("worktree "):
+                roots.add(Path(field[len("worktree "):]).resolve())
         common = Path(git("rev-parse", "--git-common-dir", cwd=PLATFORM_ROOT).stdout.strip())
         roots.add((PLATFORM_ROOT / common).resolve())  # an absolute path stays absolute
     except (OSError, subprocess.CalledProcessError):
