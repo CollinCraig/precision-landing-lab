@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "run_id": "sample-timeout-failure",
+  "seed": 11,
+  "scenario": {
+    "name": "m1-first-flight"
+  },
+  "mode": "truth",
+  "versions": {
+    "ardupilot": "Copter-SYNTHETIC",
+    "container": "ubuntu@sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "git": {
+    "commit": "0000000000000000000000000000000000000000",
+    "dirty": false
+  },
+  "host": "synthetic-sample",
+  "started_unix_us": 1800000000000000,
+  "input_sources": [
+    "runner",
+    "autopilot"
+  ]
+}

@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Replay Viewer</title>
+<meta name="description" content="Replay a saved precision-landing simulation run: 3D rooftop pad view, timeline, altitude and vertical-speed charts. Simulation only.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="app">
+  <header class="top chrome">
+    <div class="titleblock">
+      <div class="eyebrow">Precision Landing Lab · replay viewer · simulation only</div>
+    </div>
+    <div class="tools">
+      <select id="runSelect" aria-label="Choose a run"><option value="">Choose a run…</option></select>
+      <label class="btn" for="fileInput" title="Select viewer.json, plus result.json and manifest.json, from disk">Load files…</label>
+      <input id="fileInput" type="file" accept=".json,application/json" multiple hidden>
+      <button class="btn" id="recBtn" type="button" aria-pressed="false" title="Recording mode (R): hide all controls for screen capture">● Recording mode</button>
+      <button class="btn" id="themeBtn" type="button" aria-label="Toggle light or dark theme" title="Theme (T)">◐ Theme</button>
+    </div>
+  </header>
+
+  <section class="runhead chrome" aria-label="Run summary">
+    <div class="rh-main">
+      <h1 id="runId">No run loaded</h1>
+      <div id="pills" class="pills"></div>
+    </div>
+    <dl id="results" class="results"></dl>
+    <p id="derivedNote" class="note" hidden>* derived from the telemetry samples, not from result.json. PASS/FAIL is the runner's reported outcome, not an acceptance decision.</p>
+  </section>
+
+  <div id="banner" class="banner chrome" hidden></div>
+
+  <main>
+    <section class="scenecard" id="sceneCard" aria-label="3D replay">
+      <div id="scene"></div>
+      <div class="hud" aria-hidden="true">
+        <div class="hud-tl">
+          <div><span class="k">RUN</span> <span id="hudRun"></span></div>
+          <div><span class="k">MODE</span> <span id="hudMode"></span> <span class="k sp">FMODE</span> <span id="hudFmode"></span></div>
+          <div class="chips"><span id="hudState" class="chip"></span><span id="hudArm"></span></div>
+        </div>
+        <div class="hud-tr"><span id="hudEvt"></span></div>
+        <div class="hud-bl">
+          <div class="rd"><span class="k">T</span><b id="hudTime">0:00.0</b></div>
+          <div class="rd"><span class="k">ALT</span><b id="hudAlt">–</b><span class="u">m</span></div>
+          <div class="rd"><span class="k">VS</span><b id="hudVs">–</b><span class="u">m/s</span></div>
+        </div>
+      </div>
+      <div class="scene-tools chrome">
+        <button class="btn sm" id="followBtn" type="button" aria-pressed="false">Follow</button>
+        <button class="btn sm" id="resetBtn" type="button">Reset view</button>
+      </div>
+      <div class="rec-progress"><div id="recBand" class="band"></div><i class="rec-head"></i></div>
+      <button id="recExit" class="rec-exit" type="button" aria-label="Exit recording mode" title="Exit recording mode (Esc)"></button>
+    </section>
+
+    <section class="panel chrome" id="panel" aria-label="Timeline and charts">
+      <div class="transport">
+        <button class="btn primary" id="playBtn" type="button" aria-pressed="false">Play</button>
+        <div id="speeds" class="speeds" role="group" aria-label="Playback speed">
+          <button type="button" data-speed="0.5" aria-pressed="false">0.5×</button>
+          <button type="button" data-speed="1" aria-pressed="true">1×</button>
+          <button type="button" data-speed="2" aria-pressed="false">2×</button>
+          <button type="button" data-speed="4" aria-pressed="false">4×</button>
+        </div>
+        <span class="time" id="timeNow">0:00.0 / 0:00.0</span>
+        <span class="evt" id="evtNow"></span>
+      </div>
+
+      <div class="plot">
+        <div class="cursor" aria-hidden="true"></div>
+        <div class="row ticks"><div id="timeTicks" class="tickrow"></div></div>
+        <div class="row">
+          <span class="lbl">STATE</span>
+          <div id="scrub" class="track" data-scrub role="slider" tabindex="0" aria-label="Replay position" aria-valuemin="0" aria-valuenow="0" aria-valuemax="0">
+            <div id="bandState" class="band tall"></div>
+            <div id="eventTicks" class="events"></div>
+          </div>
+        </div>
+        <div class="row"><span class="lbl">MODE</span><div class="track thin" data-scrub><div id="bandMode" class="band"></div></div></div>
+        <div class="row"><span class="lbl">ARMED</span><div class="track hair" data-scrub><div id="bandArmed" class="band"></div></div></div>
+        <div class="chart"><div class="ctitle"><span>Altitude above deck</span><b id="valAlt">–</b></div><canvas id="chartAlt" data-scrub></canvas></div>
+        <div class="chart"><div class="ctitle"><span>Vertical speed (climb +)</span><b id="valVz">–</b></div><canvas id="chartVz" data-scrub></canvas></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="chrome">
+    Simulation only; no real vehicles or airspace. Keys: <kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> step · <kbd>1</kbd>–<kbd>4</kbd> speed · <kbd>R</kbd> recording mode · <kbd>T</kbd> theme.
+    URL: <code>?run=&lt;dir&gt;&amp;t=&lt;s&gt;&amp;autoplay=1&amp;speed=2&amp;rec=1&amp;theme=dark</code>
+  </footer>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

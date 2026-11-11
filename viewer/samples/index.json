@@ -1,0 +1,14 @@
+{
+  "samples": [
+    {
+      "id": "sample-clean-hold",
+      "label": "Clean: takeoff, hold 5 s, land (synthetic)",
+      "path": "samples/sample-clean-hold/"
+    },
+    {
+      "id": "sample-timeout-failure",
+      "label": "Failure: altitude timeout, abort and land (synthetic)",
+      "path": "samples/sample-timeout-failure/"
+    }
+  ]
+}

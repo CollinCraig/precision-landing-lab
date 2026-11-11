@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "run_id": "sample-clean-hold",
+  "seed": 7,
+  "scenario": {
+    "name": "m1-first-flight"
+  },
+  "mode": "truth",
+  "success": true,
+  "failure_reason": null,
+  "duration_us": 22000000,
+  "tlog_records": 244,
+  "events": [
+    {
+      "t_us": 0,
+      "kind": "run_started",
+      "source": "runner"
+    },
+    {
+      "t_us": 1500000,
+      "kind": "mode_guided",
+      "source": "runner"
+    },
+    {
+      "t_us": 2000000,
+      "kind": "armed",
+      "source": "runner"
+    },
+    {
+      "t_us": 2000000,
+      "kind": "state:takeoff",
+      "source": "runner"
+    },
+    {
+      "t_us": 8000000,
+      "kind": "altitude_reached",
+      "source": "runner"
+    },
+    {
+      "t_us": 8000000,
+      "kind": "state:hold",
+      "source": "runner"
+    },
+    {
+      "t_us": 13000000,
+      "kind": "hold_complete",
+      "source": "runner"
+    },
+    {
+      "t_us": 13000000,
+      "kind": "state:land",
+      "source": "runner"
+    },
+    {
+      "t_us": 20000000,
+      "kind": "touchdown",
+      "source": "runner"
+    },
+    {
+      "t_us": 21000000,
+      "kind": "disarmed",
+      "source": "runner"
+    },
+    {
+      "t_us": 21000000,
+      "kind": "state:done",
+      "source": "runner"
+    },
+    {
+      "t_us": 22000000,
+      "kind": "run_succeeded",
+      "source": "runner"
+    }
+  ]
+}
