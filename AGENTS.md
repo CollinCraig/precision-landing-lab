@@ -15,6 +15,13 @@ Owner-facing text includes chat replies, reports, briefs, primers, hints and dem
 - Use lists for steps and options.
 - You can use technical names, for example MAVLink, GUIDED and NED.
 
+## Text in the repository (hybrid rule, D-024)
+
+- Use STE for procedures, setup and run steps, test procedures, primers, hints and safety rules.
+- Use normal technical English for the README introduction, research notes and the decision log.
+- The README must include this line: "Procedures in this repository follow ASD-STE100 Simplified Technical English."
+- Do not put absolute home paths, usernames, hostnames or emails in tracked files.
+
 ## Project rules
 
 - Read `docs/charter.md` and `docs/decisions.md` before you start work.
