@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learning Explainers</title>
+<meta name="description" content="Hub for the Precision Landing Lab learning explainers, with the milestone to read each one before.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f3f1eb; --panel:#fbfaf6; --panel-2:#f1eee6; --ink:#1a1e23; --ink-2:#4b535c; --ink-3:#6f7780; --rule:#d8d4ca;
+  --accent:#2a5bd7; --ok:#1f8c48; --warn:#a86a00; --bad:#c2352a; --cyan:#0a849f; --tdpc:#e0ad12;
+  --ax-x:#cf3a2c; --ax-y:#1f8c48; --ax-z:#2a5bd7; --ground:#d9d5cb; --ground-line:#c3beb2; --deck:#43484f;
+  --shadow:0 1px 0 rgba(0,0,0,.03),0 8px 28px -12px rgba(30,30,20,.18);
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#808a94; --rule:#26303a;
+  --accent:#7d9dff; --ok:#46c779; --warn:#e3a33a; --bad:#ff6b5e; --cyan:#3cc2e0; --tdpc:#f0c02e;
+  --ax-x:#ff6b5e; --ax-y:#46c779; --ax-z:#7d9dff; --ground:#1c2228; --ground-line:#2b343d; --deck:#2c3238;
+  --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#808a94; --rule:#26303a;
+  --accent:#7d9dff; --ok:#46c779; --warn:#e3a33a; --bad:#ff6b5e; --cyan:#3cc2e0; --tdpc:#f0c02e;
+  --ax-x:#ff6b5e; --ax-y:#46c779; --ax-z:#7d9dff; --ground:#1c2228; --ground-line:#2b343d; --deck:#2c3238;
+  --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--sans)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px 64px}
+header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:32px 0 20px;border-bottom:1px solid var(--rule)}
+.eyebrow{font:500 12px/1.3 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.eyebrow a{color:inherit}
+h1{font-size:clamp(26px,4vw,38px);line-height:1.1;margin:10px 0 8px;letter-spacing:-.015em;font-weight:700}
+.lede{color:var(--ink-2);max-width:64ch;margin:0}
+.toggle{flex:none;font:500 13px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:999px;padding:9px 14px;cursor:pointer;min-height:40px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin:14px 0 0;font:13px var(--mono);color:var(--ink-3)}
+.meta b{color:var(--ink-2);font-weight:500}
+section{margin-top:44px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:12px}
+.sec-head .n{font:600 13px var(--mono);color:var(--ink-3)}
+h2{font-size:22px;margin:0;letter-spacing:-.01em}
+h3{font-size:16px;margin:18px 0 6px}
+p{max-width:70ch}
+.prose p,.prose li{color:var(--ink-2)}
+.prose li{max-width:68ch}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
+.grid.even{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.pad{padding:16px 18px}
+.fig{padding:10px}
+.fig svg,.fig canvas{display:block;width:100%;height:auto}
+figure{margin:0}
+figcaption{font-size:13px;color:var(--ink-3);padding:6px 14px 12px}
+.notes{padding:16px 18px;font-size:14.5px}
+.notes h4{font:600 12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin:0 0 8px}
+.notes h4:not(:first-child){margin-top:18px}
+.notes p{margin:0 0 10px;color:var(--ink-2)}
+code,.mono{font-family:var(--mono);font-size:.92em}
+code{background:var(--panel-2);border:1px solid var(--rule);border-radius:4px;padding:0 4px}
+table.t{border-collapse:collapse;width:100%;font-size:14px}
+table.t th,table.t td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+table.t th{font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+table.t td{color:var(--ink-2)}
+table.t td:first-child{color:var(--ink)}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.btn,.chip{font:500 13px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:9px;padding:9px 13px;cursor:pointer;min-height:42px;touch-action:manipulation}
+.btn:hover,.chip:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.controls{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:12px 14px;border-top:1px solid var(--rule)}
+.slider{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font:13px var(--mono);color:var(--ink-2);min-width:240px;flex:1}
+.slider output{min-width:5.5em;text-align:right;color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--accent);height:32px}
+.badge{display:inline-block;font:600 10.5px/1.4 var(--mono);letter-spacing:.06em;padding:1px 6px;border-radius:4px;border:1px solid currentColor;vertical-align:1px;white-space:nowrap}
+.ill{color:var(--warn)}
+.unv{color:var(--bad)}
+.callout{border-left:3px solid var(--accent);background:var(--panel);padding:12px 16px;border-radius:0 10px 10px 0;margin:14px 0;max-width:72ch}
+.callout p{margin:0;color:var(--ink-2)}
+.callout b{color:var(--ink)}
+details.q{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:0 16px;margin:8px 0;max-width:76ch}
+details.q summary{cursor:pointer;padding:12px 0;font-weight:500;list-style-position:outside}
+details.q div{padding:0 0 12px;color:var(--ink-2)}
+footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-size:13px;color:var(--ink-3)}
+footer a{color:var(--ink-2);word-break:break-word}
+footer ul{padding-left:18px;margin:6px 0 12px}
+.no-sol{font:12.5px var(--mono);color:var(--ink-3);border:1px dashed var(--rule);border-radius:8px;padding:8px 12px;margin-top:14px;max-width:76ch}
+.t{font-family:var(--sans);fill:var(--ink)}
+.tm{font-family:var(--mono);fill:var(--ink-2)}
+@media (max-width:900px){.grid,.grid.even{grid-template-columns:1fr}}
+@media (max-width:560px){header.top{flex-direction:column;align-items:flex-start}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.hub{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-top:28px}
+a.lesson{display:flex;flex-direction:column;text-decoration:none;color:inherit;padding:0;min-height:100%}
+a.lesson:hover{border-color:var(--ink-3)}
+a.lesson:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lesson .art{height:150px;border-bottom:1px solid var(--rule);background:var(--panel-2)}
+.lesson .art svg{width:100%;height:100%;display:block}
+.lesson .body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:8px;flex:1}
+.lesson h2{font-size:18px}
+.lesson p{margin:0;color:var(--ink-2);font-size:14.5px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:auto;padding-top:6px}
+.tags span{font:600 11px var(--mono);letter-spacing:.05em;padding:3px 8px;border-radius:999px;border:1px solid var(--accent);color:var(--accent)}
+.tags span.soft{border-color:var(--rule);color:var(--ink-3);font-weight:500}
+@media (max-width:900px){.hub{grid-template-columns:1fr 1fr}}
+@media (max-width:600px){.hub{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div>
+    <div class="eyebrow">Precision Landing Lab · learn</div>
+    <h1>Learning explainers</h1>
+    <p class="lede">Three short interactive pages. Each page prepares you for a milestone piece that you write yourself. The pages explain ideas. They do not contain solutions.</p>
+  </div>
+  <button class="toggle" id="themeBtn" type="button" aria-label="Change between light and dark theme">◐ theme</button>
+</header>
+
+<div class="hub">
+  <a class="card lesson" href="01-how-a-drone-flies.html">
+    <div class="art"><svg viewBox="0 0 300 150" aria-hidden="true">
+      <rect x="20" y="45" width="80" height="60" rx="8" fill="var(--panel)" stroke="var(--accent)" stroke-width="1.5"/><text x="60" y="80" text-anchor="middle" class="tm" font-size="11">script</text>
+      <rect x="200" y="45" width="80" height="60" rx="8" fill="var(--panel)" stroke="var(--ink)" stroke-width="1.5"/><text x="240" y="80" text-anchor="middle" class="tm" font-size="11">ArduPilot</text>
+      <rect x="112" y="52" width="76" height="16" rx="5" fill="var(--accent)"/><text x="150" y="64" text-anchor="middle" font-size="9" fill="var(--bg)" font-family="var(--mono)">COMMAND_LONG</text>
+      <rect x="112" y="84" width="76" height="16" rx="5" fill="var(--ink)"/><text x="150" y="96" text-anchor="middle" font-size="9" fill="var(--bg)" font-family="var(--mono)">COMMAND_ACK</text>
+    </svg></div>
+    <div class="body">
+      <div class="eyebrow">01</div>
+      <h2>How a drone flies</h2>
+      <p>The autopilot and your script. Flight modes, arming and MAVLink messages. A toy autopilot shows why a command is a request.</p>
+      <div class="tags"><span>read before M1</span><span class="soft">~20 min</span></div>
+    </div>
+  </a>
+  <a class="card lesson" href="02-frames-ned-body-camera.html">
+    <div class="art"><svg viewBox="0 0 300 150" aria-hidden="true">
+      <path d="M40 120L260 120" stroke="var(--ground-line)" stroke-width="2"/>
+      <g transform="translate(150 60) rotate(-12)"><path d="M-40 0H40" stroke="var(--ink)" stroke-width="4" stroke-linecap="round"/>
+        <path d="M0 0H50" stroke="var(--ax-x)" stroke-width="3"/><path d="M0 0V44" stroke="var(--ax-z)" stroke-width="3"/></g>
+      <path d="M60 120V80" stroke="var(--ax-z)" stroke-width="1.5" stroke-dasharray="3 3"/><text x="66" y="92" class="tm" font-size="11">z = −h</text>
+    </svg></div>
+    <div class="body">
+      <div class="eyebrow">02</div>
+      <h2>Frames: NED, body, camera</h2>
+      <p>Drag a drone to yaw, pitch and roll it. See one ground point in three frames. Learn why 5 m up is z = −5.</p>
+      <div class="tags"><span>read before M1</span><span>read before M2</span><span class="soft">~25 min</span></div>
+    </div>
+  </a>
+  <a class="card lesson" href="03-precision-landing-big-picture.html">
+    <div class="art"><svg viewBox="0 0 300 150" aria-hidden="true">
+      <rect x="100" y="25" width="100" height="100" fill="var(--deck)"/><circle cx="150" cy="75" r="26" fill="none" stroke="var(--tdpc)" stroke-width="3"/>
+      <rect x="140" y="65" width="20" height="20" fill="#f6f5f0" stroke="#111"/>
+      <g fill="var(--ok)"><circle cx="146" cy="70" r="3"/><circle cx="156" cy="80" r="3"/><circle cx="150" cy="86" r="3"/><circle cx="160" cy="68" r="3"/></g>
+      <g fill="var(--bad)"><circle cx="182" cy="96" r="3"/><circle cx="118" cy="56" r="3"/></g>
+    </svg></div>
+    <div class="body">
+      <div class="eyebrow">03</div>
+      <h2>Precision landing: big picture</h2>
+      <p>From tag detection to <code>LANDING_TARGET</code> to ArduPilot's descent. What happens when the target is lost, and a toy model of landing spread.</p>
+      <div class="tags"><span>read before M3</span><span class="soft">~25 min</span></div>
+    </div>
+  </a>
+</div>
+
+<section>
+  <div class="prose">
+    <p>Read the pages in order. Each page ends with check-yourself questions. Try to answer each question before you open it.</p>
+    <p>Every page lists its sources in the footer. A claim that the official docs do not confirm has the mark UNVERIFIED. A number for teaching only has the mark ILLUSTRATIVE.</p>
+  </div>
+</section>
+
+<footer>
+  Simulation-only learning material for the Precision Landing Lab. Primary sources: <a href="https://ardupilot.org/copter/">ardupilot.org/copter</a> and <a href="https://mavlink.io/en/">mavlink.io</a>. Text follows ASD-STE100 Simplified Technical English rules where possible.
+</footer>
+</div>
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('pll-theme');if(s)r.setAttribute('data-theme',s);}catch(e){}b.addEventListener('click',function(){var c=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');var n=c==='dark'?'light':'dark';r.setAttribute('data-theme',n);try{localStorage.setItem('pll-theme',n);}catch(e){}document.dispatchEvent(new Event('themechange'));});})();</script>
+</body>
+</html>

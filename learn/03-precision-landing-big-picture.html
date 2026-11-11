@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Precision Landing Overview</title>
+<meta name="description" content="Learning explainer 03: how ArduPilot precision landing uses LANDING_TARGET, what happens when the target is lost, and a toy model of landing spread.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f3f1eb; --panel:#fbfaf6; --panel-2:#f1eee6; --ink:#1a1e23; --ink-2:#4b535c; --ink-3:#6f7780; --rule:#d8d4ca;
+  --accent:#2a5bd7; --ok:#1f8c48; --warn:#a86a00; --bad:#c2352a; --cyan:#0a849f; --tdpc:#e0ad12;
+  --ax-x:#cf3a2c; --ax-y:#1f8c48; --ax-z:#2a5bd7; --ground:#d9d5cb; --ground-line:#c3beb2; --deck:#43484f;
+  --shadow:0 1px 0 rgba(0,0,0,.03),0 8px 28px -12px rgba(30,30,20,.18);
+  --sans:"IBM Plex Sans",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#808a94; --rule:#26303a;
+  --accent:#7d9dff; --ok:#46c779; --warn:#e3a33a; --bad:#ff6b5e; --cyan:#3cc2e0; --tdpc:#f0c02e;
+  --ax-x:#ff6b5e; --ax-y:#46c779; --ax-z:#7d9dff; --ground:#1c2228; --ground-line:#2b343d; --deck:#2c3238;
+  --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0d1115; --panel:#141a20; --panel-2:#1a2129; --ink:#e7eaed; --ink-2:#a9b1ba; --ink-3:#808a94; --rule:#26303a;
+  --accent:#7d9dff; --ok:#46c779; --warn:#e3a33a; --bad:#ff6b5e; --cyan:#3cc2e0; --tdpc:#f0c02e;
+  --ax-x:#ff6b5e; --ax-y:#46c779; --ax-z:#7d9dff; --ground:#1c2228; --ground-line:#2b343d; --deck:#2c3238;
+  --shadow:0 1px 0 rgba(255,255,255,.02),0 10px 30px -14px rgba(0,0,0,.7); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--sans)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px 64px}
+header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;padding:32px 0 20px;border-bottom:1px solid var(--rule)}
+.eyebrow{font:500 12px/1.3 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--ink-3)}
+.eyebrow a{color:inherit}
+h1{font-size:clamp(26px,4vw,38px);line-height:1.1;margin:10px 0 8px;letter-spacing:-.015em;font-weight:700}
+.lede{color:var(--ink-2);max-width:64ch;margin:0}
+.toggle{flex:none;font:500 13px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:999px;padding:9px 14px;cursor:pointer;min-height:40px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 22px;margin:14px 0 0;font:13px var(--mono);color:var(--ink-3)}
+.meta b{color:var(--ink-2);font-weight:500}
+section{margin-top:44px}
+.sec-head{display:flex;align-items:baseline;gap:14px;margin-bottom:12px}
+.sec-head .n{font:600 13px var(--mono);color:var(--ink-3)}
+h2{font-size:22px;margin:0;letter-spacing:-.01em}
+h3{font-size:16px;margin:18px 0 6px}
+p{max-width:70ch}
+.prose p,.prose li{color:var(--ink-2)}
+.prose li{max-width:68ch}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:20px;align-items:start}
+.grid.even{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.card{background:var(--panel);border:1px solid var(--rule);border-radius:14px;box-shadow:var(--shadow);overflow:hidden}
+.pad{padding:16px 18px}
+.fig{padding:10px}
+.fig svg,.fig canvas{display:block;width:100%;height:auto}
+figure{margin:0}
+figcaption{font-size:13px;color:var(--ink-3);padding:6px 14px 12px}
+.notes{padding:16px 18px;font-size:14.5px}
+.notes h4{font:600 12px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-3);margin:0 0 8px}
+.notes h4:not(:first-child){margin-top:18px}
+.notes p{margin:0 0 10px;color:var(--ink-2)}
+code,.mono{font-family:var(--mono);font-size:.92em}
+code{background:var(--panel-2);border:1px solid var(--rule);border-radius:4px;padding:0 4px}
+table.t{border-collapse:collapse;width:100%;font-size:14px}
+table.t th,table.t td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+table.t th{font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+table.t td{color:var(--ink-2)}
+table.t td:first-child{color:var(--ink)}
+.scroll-x{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.btn,.chip{font:500 13px var(--mono);color:var(--ink);background:var(--panel);border:1px solid var(--rule);border-radius:9px;padding:9px 13px;cursor:pointer;min-height:42px;touch-action:manipulation}
+.btn:hover,.chip:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.controls{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;padding:12px 14px;border-top:1px solid var(--rule)}
+.slider{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font:13px var(--mono);color:var(--ink-2);min-width:240px;flex:1}
+.slider output{min-width:5.5em;text-align:right;color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--accent);height:32px}
+.badge{display:inline-block;font:600 10.5px/1.4 var(--mono);letter-spacing:.06em;padding:1px 6px;border-radius:4px;border:1px solid currentColor;vertical-align:1px;white-space:nowrap}
+.ill{color:var(--warn)}
+.unv{color:var(--bad)}
+.callout{border-left:3px solid var(--accent);background:var(--panel);padding:12px 16px;border-radius:0 10px 10px 0;margin:14px 0;max-width:72ch}
+.callout p{margin:0;color:var(--ink-2)}
+.callout b{color:var(--ink)}
+details.q{background:var(--panel);border:1px solid var(--rule);border-radius:10px;padding:0 16px;margin:8px 0;max-width:76ch}
+details.q summary{cursor:pointer;padding:12px 0;font-weight:500;list-style-position:outside}
+details.q div{padding:0 0 12px;color:var(--ink-2)}
+footer{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-size:13px;color:var(--ink-3)}
+footer a{color:var(--ink-2);word-break:break-word}
+footer ul{padding-left:18px;margin:6px 0 12px}
+.no-sol{font:12.5px var(--mono);color:var(--ink-3);border:1px dashed var(--rule);border-radius:8px;padding:8px 12px;margin-top:14px;max-width:76ch}
+.t{font-family:var(--sans);fill:var(--ink)}
+.tm{font-family:var(--mono);fill:var(--ink-2)}
+@media (max-width:900px){.grid,.grid.even{grid-template-columns:1fr}}
+@media (max-width:560px){header.top{flex-direction:column;align-items:flex-start}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.pipe svg text{font-family:var(--mono)}
+#spread{touch-action:manipulation;border-radius:10px;background:var(--panel-2)}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;padding:14px}
+.stat{border:1px solid var(--rule);border-radius:10px;padding:10px 12px;background:var(--panel-2)}
+.stat b{display:block;font:600 18px var(--mono);color:var(--ink)}
+.stat span{font:12px var(--mono);color:var(--ink-3)}
+.yours{fill:var(--panel-2);stroke:var(--accent);stroke-width:1.5;stroke-dasharray:5 4}
+.theirs{fill:var(--panel-2);stroke:var(--ink-3);stroke-width:1.2}
+.ap{fill:var(--panel-2);stroke:var(--ink);stroke-width:1.8}
+@media (max-width:560px){.stats{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <div>
+    <div class="eyebrow"><a href="index.html">Precision Landing Lab · learn</a> · 03 · read before M3</div>
+    <h1>Precision landing: the big picture</h1>
+    <p class="lede">The camera finds the tag. Your code turns the detection into a target estimate. A <code>LANDING_TARGET</code> message carries the estimate to ArduPilot. ArduPilot steers the descent. This page explains each step at concept level.</p>
+    <div class="meta"><span><b>Time</b> ~25 min</span><span><b>Prepares</b> estimate.py and safety.py (M3)</span><span><b>Numbers</b> all illustrative unless a source is given</span></div>
+  </div>
+  <button class="toggle" id="themeBtn" type="button" aria-label="Change between light and dark theme">◐ theme</button>
+</header>
+
+<!-- A -->
+<section id="pipe">
+  <div class="sec-head"><span class="n">A</span><h2>The pipeline</h2></div>
+  <figure class="card">
+    <div class="fig pipe">
+    <svg viewBox="0 0 1000 250" role="img" aria-labelledby="pT">
+      <title id="pT">Camera image, tag detection, target estimate, LANDING_TARGET message, ArduPilot precision landing, position control</title>
+      <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="var(--ink-3)"/></marker></defs>
+      <g font-size="12">
+        <rect x="8" y="50" width="140" height="96" rx="10" class="theirs"/><text x="78" y="82" text-anchor="middle" class="t" font-size="14" font-weight="600">Camera</text><text x="78" y="102" text-anchor="middle" class="tm">Gazebo image</text><text x="78" y="120" text-anchor="middle" class="tm">(M2 world)</text>
+        <rect x="176" y="50" width="150" height="96" rx="10" class="yours"/><text x="251" y="82" text-anchor="middle" class="t" font-size="14" font-weight="600">Tag detector</text><text x="251" y="102" text-anchor="middle" class="tm">perception/</text><text x="251" y="120" text-anchor="middle" class="tm" style="fill:var(--accent)">your M2 piece</text>
+        <rect x="354" y="50" width="150" height="96" rx="10" class="yours"/><text x="429" y="82" text-anchor="middle" class="t" font-size="14" font-weight="600">Target estimate</text><text x="429" y="102" text-anchor="middle" class="tm">estimate.py</text><text x="429" y="120" text-anchor="middle" class="tm" style="fill:var(--accent)">your M3 piece</text>
+        <rect x="532" y="50" width="140" height="96" rx="10" class="theirs"/><text x="602" y="82" text-anchor="middle" class="t" font-size="14" font-weight="600">guidance.py</text><text x="602" y="102" text-anchor="middle" class="tm">sends</text><text x="602" y="120" text-anchor="middle" class="tm">LANDING_TARGET</text>
+        <rect x="700" y="30" width="292" height="136" rx="12" class="ap"/><text x="846" y="58" text-anchor="middle" class="t" font-size="14" font-weight="600">ArduPilot (LAND mode)</text>
+        <rect x="716" y="72" width="126" height="78" rx="8" class="theirs"/><text x="779" y="98" text-anchor="middle" class="tm">precland</text><text x="779" y="116" text-anchor="middle" class="tm">estimator</text><text x="779" y="134" text-anchor="middle" class="tm" font-size="10.5">PLND_EST_TYPE</text>
+        <rect x="852" y="72" width="126" height="78" rx="8" class="theirs"/><text x="915" y="98" text-anchor="middle" class="tm">position</text><text x="915" y="116" text-anchor="middle" class="tm">control +</text><text x="915" y="134" text-anchor="middle" class="tm">descent</text>
+        <path d="M150 98H172" stroke="var(--ink-3)" stroke-width="2" marker-end="url(#ar)"/>
+        <path d="M328 98H350" stroke="var(--ink-3)" stroke-width="2" marker-end="url(#ar)"/>
+        <path d="M506 98H528" stroke="var(--ink-3)" stroke-width="2" marker-end="url(#ar)"/>
+        <path d="M674 98H712" stroke="var(--accent)" stroke-width="2.5" marker-end="url(#ar)"/>
+        <path d="M843 111H849" stroke="var(--ink-3)" stroke-width="2" marker-end="url(#ar)"/>
+        <text x="251" y="174" text-anchor="middle" class="tm" font-size="11">tag corners, pixels</text>
+        <text x="429" y="174" text-anchor="middle" class="tm" font-size="11">TargetEstimate</text>
+        <text x="429" y="190" text-anchor="middle" class="tm" font-size="11">valid, confidence, frame</text>
+        <text x="686" y="124" text-anchor="middle" class="tm" font-size="10.5" style="fill:var(--accent)">MAVLink</text>
+        <text x="846" y="190" text-anchor="middle" class="tm" font-size="11">attitude + own motion from IMU/EKF</text>
+        <path d="M846 182V170" stroke="var(--rule)"/>
+        <text x="500" y="232" text-anchor="middle" class="tm" font-size="11.5">dashed boxes: you write them · solid boxes: agents or ArduPilot</text>
+      </g>
+    </svg>
+    </div>
+  </figure>
+  <div class="prose">
+    <p>ArduPilot does the steering. Your code gives it a good measurement of where the pad is. ArduPilot combines the measurement with its own motion data and flies the aircraft down.</p>
+    <p>To use this path, set <code>PLND_ENABLED</code> to 1 and <code>PLND_TYPE</code> to 1 (MAVLink). Other <code>PLND_TYPE</code> values select IR-LOCK, a Gazebo source or a SITL source. Precision landing works in LAND mode and in the final stage of RTL.</p>
+    <p>The <code>source</code> field of the TargetEstimate matters. In <code>camera</code> mode, no estimate can come from simulator truth. The Rust validator checks this rule.</p>
+  </div>
+</section>
+
+<!-- B -->
+<section id="msg">
+  <div class="sec-head"><span class="n">B</span><h2>What LANDING_TARGET carries</h2></div>
+  <div class="grid">
+    <div class="scroll-x card">
+    <table class="t">
+      <thead><tr><th>Field</th><th>Unit</th><th>How ArduPilot uses it (ArduPilot dev docs)</th></tr></thead>
+      <tbody>
+        <tr><td><code>time_usec</code></td><td>µs</td><td>Time of the measurement. It does not need to match the autopilot clock.</td></tr>
+        <tr><td><code>frame</code></td><td>enum</td><td><code>MAV_FRAME_BODY_FRD</code> (12) for a camera fixed to the frame. <code>MAV_FRAME_LOCAL_FRD</code> (20) for a camera on a roll/pitch gimbal.</td></tr>
+        <tr><td><code>angle_x</code>, <code>angle_y</code></td><td>rad</td><td>Angles from the camera center to the target. Used when <code>position_valid</code> = 0.</td></tr>
+        <tr><td><code>distance</code></td><td>m</td><td>Distance to the target. If 0, ArduPilot uses the rangefinder.</td></tr>
+        <tr><td><code>x</code>, <code>y</code>, <code>z</code></td><td>m</td><td>Target position in <code>frame</code>. Used when <code>position_valid</code> = 1.</td></tr>
+        <tr><td><code>position_valid</code></td><td>0/1</td><td>Selects angles (0) or position (1).</td></tr>
+        <tr><td><code>target_num</code>, <code>size_x/y</code>, <code>q</code>, <code>type</code></td><td>–</td><td>Not used by ArduPilot.</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <div class="card notes">
+      <h4>Rate</h4>
+      <p>The ArduPilot docs ask for "no less than 2hz". A higher rate is better.</p>
+      <h4>A message is not a command</h4>
+      <p><code>LANDING_TARGET</code> gets no ACK. It is a measurement. ArduPilot uses it while it is fresh. If the messages stop, ArduPilot treats the target as lost.</p>
+      <h4>Frames again</h4>
+      <p>In <code>BODY_FRD</code>, the numbers turn with the drone. ArduPilot knows its attitude, so it can correct for the turn. Page 02 shows why this matters.</p>
+    </div>
+  </div>
+</section>
+
+<!-- C -->
+<section id="est">
+  <div class="sec-head"><span class="n">C</span><h2>ArduPilot's estimator</h2></div>
+  <div class="grid even">
+    <div class="card notes">
+      <h4>Two choices: PLND_EST_TYPE</h4>
+      <p><b>0, RawSensor.</b> ArduPilot uses each measurement as it arrives. Noise in the measurement goes directly into the steering.</p>
+      <p><b>1, KalmanFilter.</b> ArduPilot predicts the target position from its own accelerometers. Then it corrects the prediction with each camera measurement. The result is usually smoother.</p>
+    </div>
+    <div class="card notes">
+      <h4>Tuning ideas (names only)</h4>
+      <p><code>PLND_ACC_P_NSE</code> sets the accelerometer noise in the filter. The docs say: "higher values weight the input from the camera more".</p>
+      <p><code>PLND_LAG</code> tells ArduPilot how old a measurement is when it arrives (0.02 to 0.25 s). Camera processing adds delay, so this value matters.</p>
+      <p><code>PLND_XY_DIST_MAX</code> stops the descent while the target is too far to the side.</p>
+    </div>
+  </div>
+</section>
+
+<!-- D -->
+<section id="lost">
+  <div class="sec-head"><span class="n">D</span><h2>When the target is lost</h2></div>
+  <div class="grid">
+    <figure class="card">
+      <div class="controls" style="border-top:0">
+        <span class="mono" style="font-size:12.5px;color:var(--ink-3)">PLND_STRICT</span>
+        <button class="chip" type="button" data-strict="0" aria-pressed="false">0 · land vertically</button>
+        <button class="chip" type="button" data-strict="1" aria-pressed="true">1 · retry</button>
+        <button class="chip" type="button" data-strict="2" aria-pressed="false">2 · hover</button>
+      </div>
+      <div class="fig">
+        <svg id="side" viewBox="0 0 640 330" role="img" aria-labelledby="sT">
+          <title id="sT">Side view of a descent where the camera loses the target</title>
+          <rect x="0" y="292" width="640" height="38" fill="var(--ground)"/>
+          <rect x="250" y="284" width="140" height="8" fill="var(--deck)"/>
+          <rect x="306" y="281" width="28" height="4" fill="#f6f5f0" stroke="#111" stroke-width=".6"/>
+          <path id="altMinLine" stroke="var(--warn)" stroke-dasharray="4 4"/>
+          <text id="altMinTxt" class="tm" font-size="11" style="fill:var(--warn)" x="8">PLND_ALT_MIN</text>
+          <path id="lostLine" stroke="var(--bad)" stroke-dasharray="2 4"/>
+          <text id="lostTxt" class="tm" font-size="11" style="fill:var(--bad)" x="8">target lost here</text>
+          <path id="trail" fill="none" stroke="var(--ink-3)" stroke-width="1.5" stroke-dasharray="3 3"/>
+          <path id="beam" stroke-width="2"/>
+          <g id="sDrone"><path d="M-22 0H22" stroke="var(--ink)" stroke-width="4" stroke-linecap="round"/><circle cx="-22" cy="-3" r="8" fill="none" stroke="var(--ink)" stroke-width="1.5"/><circle cx="22" cy="-3" r="8" fill="none" stroke="var(--ink)" stroke-width="1.5"/><rect x="-7" y="-5" width="14" height="10" rx="3" fill="var(--ink)"/></g>
+          <text id="sClock" x="632" y="20" text-anchor="end" class="tm" font-size="12"></text>
+          <text id="sPhase" x="632" y="40" text-anchor="end" class="tm" font-size="12" style="fill:var(--ink)"></text>
+        </svg>
+      </div>
+      <div class="controls">
+        <label class="slider">lost at<input type="range" id="lostH" min="0.5" max="8" step="0.5" value="4"><output id="lostHO"></output></label>
+        <button class="btn primary" id="sPlay" type="button">▶ Play</button>
+      </div>
+      <figcaption>Heights, speeds and times are ILLUSTRATIVE. The scene uses a timeout of 2 s, an ALT_MIN of 1 m and one retry.</figcaption>
+    </figure>
+    <div class="card notes">
+      <h4>The documented behaviour</h4>
+      <p><b>PLND_TIMEOUT</b> (0 to 20 s): the vehicle continues to descend for this time after the target is lost. Then it acts on <code>PLND_STRICT</code>.</p>
+      <p><b>PLND_STRICT</b>: 0 lands vertically (not strict). 1 retries the landing. 2 does not land and hovers (very strict).</p>
+      <p><b>PLND_RET_MAX</b> (0 to 10) limits the number of retries. <b>PLND_RET_BEHAVE</b> selects where a retry goes: to the last location where the camera saw the target (0), or toward the approximate target location (1).</p>
+      <p><b>PLND_ALT_MIN</b> (0 to 5 m): below this height, the vehicle continues to land vertically, even if the target is lost. <b>PLND_ALT_MAX</b> (0 to 50 m): if the vehicle does not find the target, it descends vertically down to this height. Both need a rangefinder.</p>
+      <h4>Your layer is separate</h4>
+      <p>ArduPilot's rules handle a lost target inside LAND mode. Your M3 <code>safety.py</code> is a separate layer with its own abort and go-around decisions. This page does not design that layer.</p>
+    </div>
+  </div>
+</section>
+
+<!-- E -->
+<section id="spread">
+  <div class="sec-head"><span class="n">E</span><h2>Toy model: how the landing spread grows</h2></div>
+  <div class="callout"><p><b>This is a toy.</b> It is not ArduPilot's estimator or controller. It shows a trend only. Every number in this section is <span class="badge ill">ILLUSTRATIVE</span></p></div>
+  <div class="grid">
+    <figure class="card">
+      <div class="fig"><canvas id="spreadCv" width="520" height="520" aria-label="Top view of 60 simulated touchdown points around the pad center"></canvas></div>
+      <div class="controls">
+        <label class="slider">detection noise σ<input type="range" id="noise" min="0" max="40" step="1" value="6"><output id="noiseO"></output></label>
+        <label class="slider">target lost below<input type="range" id="lostB" min="0" max="5" step="0.25" value="0"><output id="lostBO"></output></label>
+      </div>
+      <div class="controls">
+        <span class="mono" style="font-size:12.5px;color:var(--ink-3)">estimate</span>
+        <button class="chip" type="button" data-est="raw" aria-pressed="false">raw</button>
+        <button class="chip" type="button" data-est="kf" aria-pressed="true">filtered</button>
+        <span class="mono" style="font-size:12.5px;color:var(--ink-3)">gusts</span>
+        <button class="chip" type="button" data-gust="0" aria-pressed="false">off</button>
+        <button class="chip" type="button" data-gust="1" aria-pressed="true">light</button>
+        <button class="chip" type="button" data-gust="2" aria-pressed="false">strong</button>
+        <button class="btn" id="reseed" type="button">↻ new seed</button>
+      </div>
+    </figure>
+    <div>
+      <div class="card">
+        <div class="stats">
+          <div class="stat"><b id="sMed">–</b><span>median miss</span></div>
+          <div class="stat"><b id="s90">–</b><span>90% of landings within</span></div>
+          <div class="stat"><b id="sIn">–</b><span>inside 25 cm</span></div>
+        </div>
+      </div>
+      <div class="card notes" style="margin-top:14px">
+        <h4>What the toy does</h4>
+        <p>Each run starts 6 m up with a random side offset. The toy descends at 0.5 m/s and steers toward its estimate of the pad.</p>
+        <p>Each camera frame adds random error with the selected σ. "Filtered" smooths the measurements. "Raw" uses each one directly.</p>
+        <p>Below the "target lost" height, no measurements arrive. The toy continues down with its last estimate. Gusts push it away, and nothing corrects the push.</p>
+        <h4>Things to see</h4>
+        <p>Raise the noise with "raw". Then select "filtered". Set gusts off and move "target lost". Then set gusts strong. The loss alone does little. Loss plus a disturbance grows the spread.</p>
+        <p>The dashed circle is the charter goal: 25 cm in 8 of 10 calm landings.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- F -->
+<section id="check">
+  <div class="sec-head"><span class="n">F</span><h2>Check yourself</h2></div>
+  <details class="q"><summary>1. Your code sends LANDING_TARGET at 1 Hz. What do the ArduPilot docs ask for?</summary><div>No less than 2 Hz, and a higher rate is better.</div></details>
+  <details class="q"><summary>2. Which field tells ArduPilot to use x, y, z instead of the two angles?</summary><div><code>position_valid</code> = 1.</div></details>
+  <details class="q"><summary>3. With PLND_STRICT = 2, the target disappears at 4 m. What happens after the timeout?</summary><div>The vehicle does not land. It hovers. (Very strict.) Retries up to <code>PLND_RET_MAX</code> come first.</div></details>
+  <details class="q"><summary>4. The target disappears at 0.5 m, and PLND_ALT_MIN is 1 m. What happens?</summary><div>The vehicle continues to land vertically. Below <code>PLND_ALT_MIN</code>, a loss does not cause a retry. This needs a rangefinder.</div></details>
+  <details class="q"><summary>5. In the toy, why does "target lost" do little when gusts are off?</summary><div>Without a disturbance, nothing pushes the aircraft away from its last good estimate. Real flights always have some disturbance and some drift. So the loss height matters in real flights.</div></details>
+  <details class="q"><summary>6. Why must a camera-mode run never read simulator truth?</summary><div>Truth makes the perception look perfect. The result then says nothing about the real pipeline. The validator rejects such a run.</div></details>
+  <p class="no-sol">This page explains concepts only. It contains no AprilTag pose code, no frame conversion code and no abort or go-around logic. The toy model in section E is a JavaScript sketch for intuition. It is not a design for estimate.py or safety.py.</p>
+</section>
+
+<footer>
+  <b>Sources</b> (checked 2026-11-11)
+  <ul>
+    <li>Precision Landing and Loiter (PLND_ENABLED, PLND_TYPE values, LAND and RTL use, loss behaviour): <a href="https://ardupilot.org/copter/docs/precision-landing-and-loiter.html">ardupilot.org/copter/docs/precision-landing-and-loiter.html</a></li>
+    <li>Parameter list (PLND_EST_TYPE, PLND_STRICT, PLND_TIMEOUT, PLND_RET_MAX, PLND_RET_BEHAVE, PLND_ALT_MIN/MAX, PLND_LAG, PLND_ACC_P_NSE, PLND_XY_DIST_MAX): <a href="https://ardupilot.org/copter/docs/parameters.html">ardupilot.org/copter/docs/parameters.html</a></li>
+    <li>MAVLink precision landing in ArduPilot (frames, fields used, 2 Hz minimum): <a href="https://ardupilot.org/dev/docs/mavlink-precision-landing.html">ardupilot.org/dev/docs/mavlink-precision-landing.html</a></li>
+    <li>LANDING_TARGET definition: <a href="https://mavlink.io/en/messages/common.html#LANDING_TARGET">mavlink.io/en/messages/common.html#LANDING_TARGET</a></li>
+    <li>LAND mode (descent speed, disarm on ground): <a href="https://ardupilot.org/copter/docs/land-mode.html">ardupilot.org/copter/docs/land-mode.html</a></li>
+  </ul>
+  <b>UNVERIFIED</b>: default values of the PLND_ parameters (this page gives ranges only); how a retry climbs (height and speed); that ArduPilot treats the target as lost only through the absence of fresh messages (the exact freshness window is not stated here); whether precision landing applies to the AUTO-mode land command. All heights, timings, noise levels and spread values in the scene and the toy are ILLUSTRATIVE.
+</footer>
+</div>
+
+<script>(function(){var r=document.documentElement,b=document.getElementById('themeBtn');try{var s=localStorage.getItem('pll-theme');if(s)r.setAttribute('data-theme',s);}catch(e){}b.addEventListener('click',function(){var c=r.getAttribute('data-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');var n=c==='dark'?'light':'dark';r.setAttribute('data-theme',n);try{localStorage.setItem('pll-theme',n);}catch(e){}document.dispatchEvent(new Event('themechange'));});})();</script>
+<script>
+(function(){
+  'use strict';
+  var $=function(i){return document.getElementById(i);};
+  /* ---------- D: side view of target loss (illustrative timings) ---------- */
+  var S={strict:1,lostH:4,playing:false,t:0,phase:'',x:0,h:8,last:0,trail:[]};
+  var Y0=292,PX=30,XC=320,TO=2,ALTMIN=1,SPD=0.5;
+  function yOf(h){return Y0-8-h*PX;}
+  function sReset(){S.t=0;S.h=8;S.x=0;S.trail=[];S.lostT=null;S.retry=0;S.state='track';S.drift=0.035;sDraw();}
+  function sStep(dt){
+    S.t+=dt;var st=S.state;
+    if(st==='track'){S.h-=SPD*dt;S.x+=(0-S.x)*Math.min(1,dt*1.5);if(S.h<=S.lostH&&S.retry===0){S.state='lost';S.lostT=S.t;}}
+    else if(st==='lost'){S.h-=SPD*dt;S.x+=S.drift*dt*30;
+      if(S.h<=ALTMIN){S.state='vert';}
+      else if(S.t-S.lostT>=TO){S.state=S.strict===0?'vert':(S.strict===1?'climb':'climb2');}}
+    else if(st==='vert'){S.h-=SPD*dt;S.x+=S.drift*dt*30;}
+    else if(st==='climb'||st==='climb2'){S.h+=0.8*dt;S.x+=(0-S.x)*Math.min(1,dt*.8);if(S.h>=S.lostH+1.5){S.retry=1;S.state=st==='climb'?'track':'hover';}}
+    else if(st==='hover'){S.x+=(0-S.x)*Math.min(1,dt*.8);if(S.t>40)S.playing=false;}
+    if(S.h<=0){S.h=0;S.state='down';S.playing=false;}
+    S.trail.push([XC+S.x*PX,yOf(S.h)]);
+  }
+  var PH={track:'target seen: precision descent',lost:'target lost: continue for PLND_TIMEOUT',vert:'land vertically',climb:'retry: climb, then descend again',climb2:'retry: climb',hover:'retries used: hover, do not land',down:'touchdown'};
+  function sDraw(){
+    $('altMinLine').setAttribute('d','M0 '+yOf(ALTMIN)+'H640');$('altMinTxt').setAttribute('y',yOf(ALTMIN)-4);
+    $('lostLine').setAttribute('d','M0 '+yOf(S.lostH)+'H640');$('lostTxt').setAttribute('y',yOf(S.lostH)-4);
+    var x=XC+S.x*PX,y=yOf(S.h);$('sDrone').setAttribute('transform','translate('+x+','+y+')');
+    $('trail').setAttribute('d',S.trail.length?'M'+S.trail.map(function(p){return p[0].toFixed(1)+' '+p[1].toFixed(1);}).join('L'):'');
+    var seen=S.state==='track';
+    var b=$('beam');b.setAttribute('d','M'+x+' '+(y+6)+'L320 282');b.setAttribute('stroke',seen?'var(--ok)':'var(--bad)');b.setAttribute('stroke-dasharray',seen?'':'3 5');b.setAttribute('opacity',S.state==='down'?0:.8);
+    $('sClock').textContent='t = '+S.t.toFixed(1)+' s · h = '+S.h.toFixed(1)+' m';
+    $('sPhase').textContent=PH[S.state]||'';
+    if(S.state==='down')$('sPhase').textContent='touchdown, miss ≈ '+Math.abs(S.x).toFixed(2)+' m (illustrative)';
+  }
+  function sLoop(now){if(!S.playing){$('sPlay').textContent='▶ Play';return;}var dt=Math.min(.05,(now-S.last)/1000);S.last=now;for(var i=0;i<2;i++)sStep(dt);sDraw();requestAnimationFrame(sLoop);}
+  $('sPlay').addEventListener('click',function(){if(S.playing){S.playing=false;return;}if(S.state==='down'||S.state==='hover'||S.t===0)sReset();S.playing=true;this.textContent='❚❚ Pause';S.last=performance.now();requestAnimationFrame(sLoop);});
+  document.querySelectorAll('[data-strict]').forEach(function(c){c.addEventListener('click',function(){S.strict=+c.dataset.strict;document.querySelectorAll('[data-strict]').forEach(function(d){d.setAttribute('aria-pressed',d===c?'true':'false');});S.playing=false;sReset();});});
+  $('lostH').addEventListener('input',function(){S.lostH=+this.value;$('lostHO').textContent=S.lostH.toFixed(1)+' m';S.playing=false;sReset();});
+  $('lostHO').textContent=S.lostH.toFixed(1)+' m';sReset();
+
+  /* ---------- E: toy spread model (illustrative; not ArduPilot) ---------- */
+  var T={noise:6,lostB:0,est:'kf',gust:1,seed:7};
+  function rng(seed){var a=seed>>>0;return function(){a|=0;a=a+0x6D2B79F5|0;var t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+  function gauss(r){var u=Math.max(1e-9,r()),v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+  function landing(r){
+    var dt=0.05,h=6,px=(r()-.5)*1.6,py=(r()-.5)*1.6,vx=0,vy=0,ex=px,ey=py,wx=0,wy=0,sig=T.noise/100,g=[0,.25,.7][T.gust],k=0;
+    while(h>0){
+      k++;
+      var seen=!(T.lostB>0&&h<T.lostB);
+      if(seen&&k%2===0){var mx=px+gauss(r)*sig,my=py+gauss(r)*sig;
+        if(T.est==='raw'){ex=mx;ey=my;}else{ex+=0.2*(mx-ex);ey+=0.2*(my-ey);}}
+      var cx=-ex*0.9,cy=-ey*0.9,m=Math.hypot(cx,cy);if(m>1){cx/=m;cy/=m;}
+      vx+=(cx-vx)*Math.min(1,dt*3);vy+=(cy-vy)*Math.min(1,dt*3);
+      wx+=gauss(r)*g*dt;wy+=gauss(r)*g*dt;wx*=0.995;wy*=0.995;
+      var dx=(vx+wx)*dt,dy=(vy+wy)*dt;px+=dx;py+=dy;
+      /* the toy knows its own motion, so it moves its estimate with it */
+      ex+=dx;ey+=dy;
+      h-=0.5*dt;
+    }
+    return [px,py];
+  }
+  var pts=[],shown=0,cv=$('spreadCv'),ctx=cv.getContext('2d'),SZ=520;
+  function run(){var r=rng(T.seed);pts=[];for(var i=0;i<60;i++)pts.push(landing(r));shown=0;stats();anim();}
+  function stats(){var d=pts.map(function(p){return Math.hypot(p[0],p[1]);}).sort(function(a,b){return a-b;});
+    var med=d[Math.floor(d.length/2)],p90=d[Math.floor(d.length*.9)],inn=d.filter(function(x){return x<=.25;}).length;
+    $('sMed').textContent=(med*100).toFixed(0)+' cm';$('s90').textContent=(p90*100).toFixed(0)+' cm';$('sIn').textContent=Math.round(inn/d.length*100)+' %';}
+  function size(){var w=cv.parentNode.clientWidth-20;SZ=Math.max(260,Math.min(560,w));var D=window.devicePixelRatio||1;cv.width=SZ*D;cv.height=SZ*D;cv.style.width=SZ+'px';cv.style.height=SZ+'px';ctx.setTransform(D,0,0,D,0,0);cv.style.margin='0 auto';}
+  function draw(){
+    var cs=getComputedStyle(document.documentElement),col=function(k){return cs.getPropertyValue(k).trim();};
+    var s=SZ/2.2,c=SZ/2;ctx.clearRect(0,0,SZ,SZ);
+    ctx.fillStyle=col('--deck');ctx.fillRect(c-1*s,c-1*s,2*s,2*s);
+    ctx.strokeStyle=col('--tdpc');ctx.lineWidth=3;ctx.beginPath();ctx.arc(c,c,.5*s,0,7);ctx.stroke();
+    ctx.fillStyle='#f6f5f0';ctx.fillRect(c-.2*s,c-.2*s,.4*s,.4*s);ctx.strokeStyle='#111';ctx.lineWidth=1;ctx.strokeRect(c-.2*s,c-.2*s,.4*s,.4*s);
+    ctx.setLineDash([6,5]);ctx.strokeStyle=col('--accent');ctx.lineWidth=2;ctx.beginPath();ctx.arc(c,c,.25*s,0,7);ctx.stroke();ctx.setLineDash([]);
+    ctx.font='12px "IBM Plex Mono",monospace';ctx.fillStyle=col('--ink-2');ctx.fillText('25 cm',c+.25*s*0.72+4,c-.25*s*0.72-4);
+    ctx.fillText('2 m FATO square · 1 m ring · tag',8,SZ-10);
+    for(var i=0;i<shown;i++){var p=pts[i],d=Math.hypot(p[0],p[1]);ctx.beginPath();ctx.arc(c+p[1]*s,c-p[0]*s,4.5,0,7);ctx.fillStyle=d<=.25?col('--ok'):col('--bad');ctx.globalAlpha=.85;ctx.fill();ctx.globalAlpha=1;ctx.strokeStyle=col('--bg');ctx.lineWidth=1;ctx.stroke();}
+  }
+  var animId=null;
+  function anim(){if(animId)cancelAnimationFrame(animId);var reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;if(reduce){shown=pts.length;draw();return;}
+    (function f(){shown=Math.min(pts.length,shown+3);draw();if(shown<pts.length)animId=requestAnimationFrame(f);})();}
+  var deb=null;function rerun(){clearTimeout(deb);deb=setTimeout(run,60);}
+  $('noise').addEventListener('input',function(){T.noise=+this.value;$('noiseO').textContent=T.noise+' cm';rerun();});
+  $('lostB').addEventListener('input',function(){T.lostB=+this.value;$('lostBO').textContent=T.lostB?T.lostB.toFixed(2)+' m':'never';rerun();});
+  function chips(attr,key,num){document.querySelectorAll('['+attr+']').forEach(function(c){c.addEventListener('click',function(){T[key]=num?+c.getAttribute(attr):c.getAttribute(attr);document.querySelectorAll('['+attr+']').forEach(function(d){d.setAttribute('aria-pressed',d===c?'true':'false');});run();});});}
+  chips('data-est','est',false);chips('data-gust','gust',true);
+  $('reseed').addEventListener('click',function(){T.seed=(T.seed*48271+11)%2147483647;run();});
+  $('noiseO').textContent=T.noise+' cm';$('lostBO').textContent='never';
+  window.addEventListener('resize',function(){size();draw();});
+  document.addEventListener('themechange',draw);
+  try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);}catch(e){}
+  size();run();
+})();
+</script>
+</body>
+</html>
