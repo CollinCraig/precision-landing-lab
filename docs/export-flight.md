@@ -32,7 +32,7 @@ Alternative without a server: open `viewer/index.html`, select "Load files…", 
 
 - `--t0 first-position`: time zero is the first position sample. The exporter drops earlier events and prints how many.
 - The default time zero is the first tlog record. The replay then starts with a still period before the first position sample.
-- `--verdict PASS` or `--verdict FAIL`: the tlog has no verdict, so you supply it. The exporter writes `success` and `verdict` in the derived `result.json`. The viewer then shows PASS or FAIL.
+- `--verdict PASS` or `--verdict FAIL`: the tlog has no verdict, so you supply it. The exporter writes `success`, `verdict` and `"verdict_source": "operator"` in the derived `result.json`. The viewer then shows `PASS (operator)` or `FAIL (operator)`. It never shows this verdict as a runner result.
 - `--viewer-only`: write only `viewer.json`. An existing `result.json` stays unchanged. Use this option for a run directory that has its own `result.json`.
 - `--sysid N --compid N`: select the vehicle yourself. The default is the first vehicle HEARTBEAT.
 
@@ -40,8 +40,8 @@ Alternative without a server: open `viewer/index.html`, select "Load files…", 
 
 - The exporter uses the first vehicle HEARTBEAT to find the vehicle (system ID and component ID). It skips the MAVProxy ground station heartbeat.
 - It uses only messages from that system and component. Messages from other components (gimbal, companion computer) are ignored.
-- It decodes five message types: HEARTBEAT, GLOBAL_POSITION_INT, ATTITUDE, COMMAND_ACK and STATUSTEXT. It checks the CRC and the payload length of each frame. MAVLink v1 needs the exact length. MAVLink v2 can have trailing zero bytes removed.
-- A frame of another message type has no known CRC extra. The exporter accepts it only if the next record starts right after it (within one hour). Otherwise the exporter skips it as corrupt.
+- It decodes five message types: HEARTBEAT, GLOBAL_POSITION_INT, ATTITUDE, COMMAND_ACK and STATUSTEXT. It checks the CRC of every frame, also of other message types, and the payload length of each decoded frame. MAVLink v1 needs the exact length. MAVLink v2 can have trailing zero bytes removed.
+- The CRC extra of each message comes from `lab/mavlink_crc_extra.py` (the ardupilotmega dialect, generated from pymavlink; the file header names the version and the command). A frame with a bad CRC or with a message id that is not in the table is skipped and counted. The exporter then looks for the next record. A message that is not in the dialect is skipped too.
 - It skips bad frames and counts the skipped bytes. Check that `skipped_bytes` is 0. It does not join chunked STATUSTEXT messages.
 - A gap of more than one day between records is not an error. The exporter counts it in `large_gaps` and prints a warning.
 - Attitude columns use only the latest ATTITUDE record at or before each position sample. Before the first ATTITUDE record, the value is `null`. An ATTITUDE record with NaN or Infinity also gives `null`.
@@ -51,4 +51,4 @@ Alternative without a server: open `viewer/index.html`, select "Load files…", 
 ## Test
 
 Run: `python3 -m unittest tests.test_export_tlog -v`.
-The tests build a small synthetic tlog in memory. Two tests compare the reader with pymavlink. They run only where pymavlink is installed (the container venv `~/venv-ardupilot`). CI skips them.
+The tests build a small synthetic tlog in memory. Three tests compare the reader and the CRC table with pymavlink. They run only where pymavlink is installed (the container venv `~/venv-ardupilot`). CI skips them.

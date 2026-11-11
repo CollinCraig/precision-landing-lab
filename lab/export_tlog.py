@@ -6,8 +6,9 @@ v1 or v2 frame per record, as written by MAVProxy and pymavlink). Writes
 (COMMAND_ACK, STATUSTEXT, mode and armed changes as replay events).
 
 The reader uses only the Python standard library. Reason: the CI Python job
-and the host have no pymavlink. The reader decodes only five message types and
-checks the CRC of each frame. The tests compare it with pymavlink when
+and the host have no pymavlink. The reader decodes only five message types. It
+checks the CRC of every frame, also of the types it does not decode, with the
+table in lab/mavlink_crc_extra.py. The tests compare it with pymavlink when
 pymavlink is installed (the container venv).
 
 The exporter uses only data that the tlog contains. It reads no simulator
@@ -22,6 +23,8 @@ import math
 from pathlib import Path
 import struct
 import sys
+
+from lab.mavlink_crc_extra import CRC_EXTRA
 
 SCHEMA_VERSION = 1
 GENERATOR = "lab/export_tlog.py"
@@ -62,9 +65,6 @@ RESULTS = ["accepted", "temporarily_rejected", "denied", "unsupported", "failed"
 MIN_PLAUSIBLE_TIMESTAMP_US = 10 ** 15  # year 2001; a tlog written by MAVProxy is later
 MAX_PLAUSIBLE_TIMESTAMP_US = 4 * 10 ** 15  # year 2096
 LARGE_GAP_US = 86400 * 10 ** 6  # a gap above one day is reported, never fatal
-# After a frame of unknown type (no CRC extra known) the next record must start
-# within this time window. Reason: the length byte of such a frame is unchecked.
-LOOKAHEAD_WINDOW_US = 3600 * 10 ** 6
 VERDICTS = {"PASS": True, "FAIL": False}
 
 
@@ -85,12 +85,12 @@ def crc16(data, extra):
 def _frame_at(buf, pos):
     """Parse one frame at buf[pos]. Return (msgid, sysid, compid, payload, end) or None.
 
-    None means: no valid frame here. A frame of a supported message type must
-    have a valid CRC and a valid payload length (MAVLink v1: the exact base
-    length; v2: 1 byte up to the full length, because the sender removes
-    trailing zero bytes). A frame of another type has no known CRC extra. It is
-    accepted by structure only, with payload None. `iter_records` checks that
-    the next record starts after it.
+    None means: no valid frame here. Every frame must have a msgid of the
+    ardupilotmega dialect and a valid CRC (checked with CRC_EXTRA). A frame of
+    a supported message type must also have a valid payload length (MAVLink v1:
+    the exact base length; v2: 1 byte up to the full length, because the sender
+    removes trailing zero bytes). For a frame of another type the payload is
+    None; the reader does not decode it.
     """
     magic = buf[pos]
     if magic == 0xFE:
@@ -109,35 +109,26 @@ def _frame_at(buf, pos):
         head, signed, v1 = 10, 13 if incompat & 0x01 else 0, False
     else:
         return None
+    crc_extra = CRC_EXTRA.get(msgid)
+    if crc_extra is None:
+        return None
     end = pos + head + length + 2 + signed
     if end > len(buf):
         return None
     payload = buf[pos + head:pos + head + length]
     if msgid in KNOWN:
-        _, crc_extra, base, ext = KNOWN[msgid]
+        _, _, base, ext = KNOWN[msgid]
         base_len, full_len = struct.calcsize(base), struct.calcsize(base + ext)
         if v1 and length != base_len:
             return None
         if not v1 and not 1 <= length <= full_len:
             return None
-        want = struct.unpack_from("<H", buf, pos + head + length)[0]
-        if crc16(buf[pos + 1:pos + head + length], crc_extra) != want:
-            return None
-    else:
+    want = struct.unpack_from("<H", buf, pos + head + length)[0]
+    if crc16(buf[pos + 1:pos + head + length], crc_extra) != want:
+        return None
+    if msgid not in KNOWN:
         payload = None
     return msgid, sysid, compid, payload, end
-
-
-def _next_record_follows(buf, end, ts):
-    """True if a plausible record starts at buf[end] (or the buffer ends there)."""
-    if end == len(buf):
-        return True
-    if end + 8 + 6 > len(buf):
-        return False
-    next_ts = struct.unpack_from(">Q", buf, end)[0]
-    if abs(next_ts - ts) > LOOKAHEAD_WINDOW_US:
-        return False
-    return _frame_at(buf, end + 8) is not None
 
 
 def iter_records(buf):
@@ -145,9 +136,9 @@ def iter_records(buf):
 
     The generator yields tuples for records. Its last item is a dict with
     `records`, `skipped_bytes` and `large_gaps`. A bad frame makes the reader
-    scan forward one byte at a time until a plausible timestamp and a valid
-    frame follow. A gap of more than one day between records is counted in
-    `large_gaps`; the reader continues after it.
+    scan forward one byte at a time until a plausible timestamp and a frame
+    with a valid CRC follow. A gap of more than one day between records is
+    counted in `large_gaps`; the reader continues after it.
     """
     pos, size, records, skipped, gaps = 0, len(buf), 0, 0, 0
     last_ts = 0
@@ -156,8 +147,6 @@ def iter_records(buf):
         frame = None
         if MIN_PLAUSIBLE_TIMESTAMP_US <= ts <= MAX_PLAUSIBLE_TIMESTAMP_US:
             frame = _frame_at(buf, pos + 8)
-            if frame is not None and frame[3] is None and not _next_record_follows(buf, frame[4], ts):
-                frame = None  # unverified length: it does not end at a record boundary
         if frame is None:
             pos += 1
             skipped += 1
@@ -398,7 +387,7 @@ def build_replay(data, run_id="tlog-export", t0="first-record", verdict=None):
     if verdict is not None:
         result["success"] = VERDICTS[verdict]
         result["verdict"] = verdict
-        result["verdict_source"] = "operator (--verdict)"
+        result["verdict_source"] = "operator"
         result["note"] = (
             "Events derived from the tlog by %s. The verdict %s comes from the operator, not from the tlog."
             % (GENERATOR, verdict)

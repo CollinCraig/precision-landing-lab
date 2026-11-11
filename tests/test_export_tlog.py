@@ -9,6 +9,7 @@ import tempfile
 import unittest
 
 from lab.export_tlog import TlogError, crc16, export, main, parse_tlog
+from lab.mavlink_crc_extra import CRC_EXTRA
 
 try:  # only in the container venv; CI and the host skip these tests
     from pymavlink.dialects.v10 import common as mavlink_v1
@@ -18,7 +19,6 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parent.parent
 T0 = 1_800_000_000_000_000  # microseconds
-CRC_EXTRA = {0: 50, 30: 39, 33: 104, 77: 143, 253: 83}
 
 
 def frame_v2(msgid, payload, sysid=1, compid=1, seq=0, truncate=True):
@@ -51,14 +51,15 @@ def attitude(roll, pitch, yaw, sysid=1, compid=1):
     return frame_v2(30, struct.pack("<Iffffff", 0, roll, pitch, yaw, 0, 0, 0), sysid, compid)
 
 
-def unknown_frame(msgid=1, payload=bytes(31), length=None):
+def unknown_frame(msgid=1, payload=bytes(31), length=None, bad_crc=False):
     """A frame of a message type that the exporter does not decode (SYS_STATUS).
 
-    `length` overrides the length byte (a corrupt frame). The CRC bytes are
-    arbitrary: the exporter has no CRC extra for this type.
+    The CRC is valid. `length` overrides the length byte (a corrupt frame: the
+    CRC no longer matches). `bad_crc` flips the CRC.
     """
     body = bytes([len(payload) if length is None else length, 0, 0, 0, 1, 1]) + msgid.to_bytes(3, "little") + payload
-    return b"\xfd" + body + b"\x12\x34"
+    crc = crc16(body[:6 + 3 + len(payload)], CRC_EXTRA[msgid]) ^ (0xFFFF if bad_crc else 0)
+    return b"\xfd" + body + struct.pack("<H", crc)
 
 
 def statustext(severity, text):
@@ -284,15 +285,53 @@ class ExportTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             main([str(self.tlog), str(self.dir / "cli2"), "--verdict", "MAYBE"])
 
-    def test_corrupt_length_of_unknown_message_is_detected(self):  # finding 2
-        # The damaged length covers the next position record and part of the one after.
+    def _damaged_unknown(self, covered):
+        """Damaged SYS_STATUS length that ends exactly after `covered` record bytes."""
+        return unknown_frame(payload=bytes(31), length=31 + covered)
+
+    def test_corrupt_length_inside_next_record_is_detected(self):  # finding 2
         pos_a = record(5_000_000, position(LAT, LON, 5000_0, 0, 0))
         pos_b = record(6_000_000, position(LAT, LON, 7000, 0, 0))
-        damaged = record(4_900_000, unknown_frame(payload=bytes(31), length=31 + len(pos_a) + 8))
+        damaged = record(4_900_000, self._damaged_unknown(len(pos_a) + 8))
         data = sample_tlog() + damaged + pos_a + pos_b + record(7_000_000, position(LAT, LON, 1000, 0, 0))
         parsed = parse_tlog(data)
         self.assertEqual([p[3] for p in parsed["positions"]][-3:], [50000, 7000, 1000])
         self.assertGreater(parsed["stats"]["skipped_bytes"], 0)
+
+    def test_corrupt_length_ending_at_next_record_start_is_detected(self):  # finding 2 (aligned)
+        pos_a = record(5_000_000, position(LAT, LON, 5000_0, 0, 0))
+        pos_b = record(6_000_000, position(LAT, LON, 7000, 0, 0))
+        damaged = record(4_900_000, self._damaged_unknown(len(pos_a)))
+        data = sample_tlog() + damaged + pos_a + pos_b
+        parsed = parse_tlog(data)
+        self.assertEqual([p[3] for p in parsed["positions"]][-2:], [50000, 7000])
+        self.assertGreater(parsed["stats"]["skipped_bytes"], 0)
+
+    def test_corrupt_length_ending_at_file_end_is_detected(self):  # finding 2 (aligned)
+        pos_a = record(5_000_000, position(LAT, LON, 5000_0, 0, 0))
+        damaged = record(4_900_000, self._damaged_unknown(len(pos_a)))
+        parsed = parse_tlog(sample_tlog() + damaged + pos_a)
+        self.assertEqual([p[3] for p in parsed["positions"]][-1:], [50000])
+        self.assertGreater(parsed["stats"]["skipped_bytes"], 0)
+
+    def test_unknown_frame_with_bad_crc_or_unknown_msgid_is_skipped(self):  # finding 2
+        bad = record(4_600_000, unknown_frame(bad_crc=True))
+        no_such = record(4_650_000, b"\xfd" + bytes([1, 0, 0, 0, 1, 1]) + (60000).to_bytes(3, "little") + b"\0\0\0")
+        pos = record(5_000_000, position(LAT, LON, 1000, 0, 0))
+        parsed = parse_tlog(sample_tlog() + bad + no_such + pos)
+        self.assertEqual(parsed["stats"]["skipped_bytes"], len(bad) + len(no_such))
+        self.assertEqual(parsed["stats"]["records"], 16 + 1)
+        self.assertEqual([p[3] for p in parsed["positions"]][-1], 1000)
+
+    def test_gap_above_one_hour_keeps_intact_unsupported_frame(self):  # finding 9
+        hour = 3600 * 10 ** 6
+        for gap in (hour, hour + 1, 5 * hour):
+            data = (record(0, heartbeat(0, 0)) + record(1_000, unknown_frame())
+                    + record(1_000 + gap, position(LAT, LON, 1000, 0, 0)))
+            parsed = parse_tlog(data)
+            self.assertEqual(parsed["stats"]["skipped_bytes"], 0, gap)
+            self.assertEqual(parsed["stats"]["records"], 3, gap)
+            self.assertEqual([p[3] for p in parsed["positions"]], [1000])
 
     def test_intact_unknown_messages_are_kept_without_skips(self):  # finding 2
         data = (
@@ -413,6 +452,24 @@ class ExportTests(unittest.TestCase):
         self.assertEqual([p[3] for p in parse_tlog(data)["positions"]], [3000])
 
     @unittest.skipUnless(shutil.which("node"), "node is not installed")
+    def test_viewer_labels_operator_verdict_as_operator(self):  # finding 8
+        for verdict in ("PASS", "FAIL"):
+            export(self.tlog, self.dir / "replay", verdict=verdict)
+            self.assertEqual(json.loads((self.dir / "replay" / "result.json").read_text())["verdict_source"], "operator")
+            script = (
+                "const P=require(process.argv[1]+'/viewer/app.js');const fs=require('fs');"
+                "const r=JSON.parse(fs.readFileSync(process.argv[2]+'/result.json'));"
+                "console.log(JSON.stringify(P.verdictLabels(P.summarizeResult(r,null,null))));"
+            )
+            done = subprocess.run(["node", "-e", script, str(ROOT), str(self.dir / "replay")],
+                                  capture_output=True, text=True, timeout=60)
+            self.assertEqual(done.returncode, 0, done.stderr)
+            labels = json.loads(done.stdout)
+            self.assertEqual(labels["pill"], verdict + " (operator)")
+            self.assertIn("OPERATOR VERDICT, NOT A RUNNER RESULT", labels["resultEy"])
+            self.assertNotIn("REPORTED BY THE RUNNER", labels["resultEy"])
+
+    @unittest.skipUnless(shutil.which("node"), "node is not installed")
     def test_viewer_parser_accepts_the_output(self):
         export(self.tlog, self.dir / "replay")
         script = (
@@ -454,6 +511,11 @@ class PymavlinkCrossCheck(unittest.TestCase):
         self.assertEqual(parsed["texts"][0][1:], (6, "Arming motors"))
         att = parsed["attitudes"][0]
         self.assertTrue(all(abs(a - b) < 1e-6 for a, b in zip(att[1:], (0.1, -0.2, 3.0))))
+
+    def test_crc_table_matches_pymavlink(self):
+        from pymavlink.dialects.v20 import ardupilotmega
+        want = {i: c.crc_extra for i, c in ardupilotmega.mavlink_map.items()}
+        self.assertEqual(CRC_EXTRA, want)
 
     def test_v1(self):
         self.check(1)

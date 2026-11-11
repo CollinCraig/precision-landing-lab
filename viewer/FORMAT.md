@@ -34,9 +34,17 @@ when the record has a non-finite value). It adds `source.sysid` and
 `source.compid` (the vehicle that it used). The file is strict JSON. It also
 writes a derived `result.json` that has
 `"derived": true`, no verdict unless the operator passes `--verdict PASS|FAIL`
-(then `success` and `verdict` are set), and events for COMMAND_ACK, STATUSTEXT, mode
+(then `success`, `verdict` and `"verdict_source": "operator"` are set), and events for COMMAND_ACK, STATUSTEXT, mode
 changes and arm changes. Event kinds: `ack:<command>:<result>`,
 `statustext:<severity>: <text>`, `mode:<NAME>`, `armed`, `disarmed`.
+
+**Verdict source.** `result.json` can have `verdict_source`. The value
+`"operator"` means a person typed the verdict (`--verdict`). No runner or
+validator produced it. The viewer then shows `PASS (operator)` or
+`FAIL (operator)` in the header, the cinematic result card says
+`RESULT · OPERATOR VERDICT, NOT A RUNNER RESULT`, and the notes say that the
+verdict is not a runner result. Without `verdict_source`, the viewer treats
+`success` as the runner's reported outcome.
 
 Proposed mapping, all from the filtered tlog plus `result.json`:
 

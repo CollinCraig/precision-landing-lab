@@ -81,6 +81,23 @@ test('summarizeResult: verdict, failure rows, derived values', () => {
   assert.equal(P.summarizeResult(null, null, null).verdict, 'unknown');
 });
 
+test('operator verdict is labelled as operator, never as a runner result', () => {
+  const op = P.summarizeResult({ derived: true, success: true, verdict: 'PASS', verdict_source: 'operator' }, null, null);
+  assert.equal(op.source, 'operator');
+  for (const success of [true, false]) {
+    const sum = P.summarizeResult({ success, verdict_source: 'operator' }, null, null);
+    const l = P.verdictLabels(sum);
+    assert.match(l.pill, /operator/i);
+    assert.match(l.resultEy, /OPERATOR/);
+    for (const text of [l.pillTitle, l.resultEy, l.foot, l.note]) assert.doesNotMatch(text, /reported (by the runner|outcome)|runner's reported/i);
+    assert.match(l.foot, /operator/i);
+  }
+  const rn = P.summarizeResult({ success: true }, null, null);
+  assert.equal(rn.source, 'runner');
+  assert.match(P.verdictLabels(rn).resultEy, /RUNNER/);
+  assert.equal(P.summarizeResult(null, null, null).source, 'none');
+});
+
 test('stateToken is stable and flags failures red', () => {
   assert.equal(P.stateToken('timeout', 0), 'red');
   assert.equal(P.stateToken('takeoff', 3), 'vblue');

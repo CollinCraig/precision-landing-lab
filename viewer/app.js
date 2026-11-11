@@ -229,7 +229,31 @@
       rows.push({ k: 'Peak altitude', v: peak.toFixed(1) + ' m', derived: true });
       rows.push({ k: 'Max |vz|', v: vmax.toFixed(1) + ' m/s', derived: true });
     }
-    return { verdict, mode, rows };
+    const operator = !!(result && typeof result.verdict_source === 'string' && /^operator/i.test(result.verdict_source));
+    return { verdict, mode, rows, source: verdict === 'unknown' ? 'none' : operator ? 'operator' : 'runner' };
+  }
+
+  /** Texts that say where a PASS/FAIL comes from: the runner, or an operator who typed it (tlog export --verdict). */
+  function verdictLabels(sum) {
+    const word = sum.verdict === 'pass' ? 'PASS' : sum.verdict === 'fail' ? 'FAIL' : 'NO RESULT';
+    if (sum.source === 'operator') {
+      return {
+        word,
+        pill: word + ' (operator)',
+        pillTitle: 'Verdict typed by the operator when the tlog was exported (--verdict). It is NOT a runner or validator result and was not checked by any software.',
+        resultEy: 'RESULT · OPERATOR VERDICT, NOT A RUNNER RESULT',
+        foot: ' PASS/FAIL is the operator\'s own verdict, typed at export. No runner or validator produced it, and it is not an acceptance decision.',
+        note: 'PASS/FAIL is the operator\'s verdict, not a runner result, and not an acceptance decision.',
+      };
+    }
+    return {
+      word,
+      pill: word,
+      pillTitle: 'Outcome reported by the runner in result.json. Not independently checked; use `plv check` for structural validity.',
+      resultEy: 'RESULT · REPORTED BY THE RUNNER',
+      foot: ' PASS/FAIL is the runner\'s reported outcome, not an acceptance decision.',
+      note: 'PASS/FAIL is the runner\'s reported outcome, not an acceptance decision.',
+    };
   }
 
   /** Colour token for a mission-state / flight-mode name; stable per name. */
@@ -347,7 +371,7 @@
   // M2+: LiveSource = { connect(url, store) } that calls store.append({t,n,e,d,alt,vz,mode,armed,state,hdg}).
 
   const api = {
-    parseViewer, TelemetryStore, runLengths, niceTicks, formatTime, summarizeResult, stateToken, runUrls,
+    parseViewer, TelemetryStore, runLengths, niceTicks, formatTime, summarizeResult, verdictLabels, stateToken, runUrls,
     lerpAngle, ReplaySource, luminance, contrastRatio, readableOn, fmtSigned, eventLabel,
   };
   if (typeof module === 'object' && module.exports) module.exports = api;
@@ -534,8 +558,9 @@
     const pills = $('pills');
     pills.textContent = '';
     if (sum.mode) pills.appendChild(el('span', 'pill mode', sum.mode));
-    const v = el('span', 'pill ' + sum.verdict, sum.verdict === 'pass' ? 'PASS' : sum.verdict === 'fail' ? 'FAIL' : 'NO RESULT');
-    v.title = 'Outcome reported by the runner in result.json. Not independently checked; use `plv check` for structural validity.';
+    const vl = verdictLabels(sum);
+    const v = el('span', 'pill ' + sum.verdict + (sum.source === 'operator' ? ' operator' : ''), vl.pill);
+    v.title = vl.pillTitle;
     pills.appendChild(v);
     if (st.source && st.source.kind === 'synthetic') pills.appendChild(el('span', 'pill synth', 'synthetic'));
     const dl = $('results');
@@ -546,7 +571,8 @@
       d.appendChild(el('dd', null, r.v));
       dl.appendChild(d);
     });
-    $('derivedNote').hidden = !sum.rows.some((r) => r.derived);
+    $('derivedNote').hidden = !sum.rows.some((r) => r.derived) && sum.source !== 'operator';
+    $('derivedNote').textContent = (sum.rows.some((r) => r.derived) ? '* derived from the telemetry samples, not from result.json. ' : '') + verdictLabels(sum).note;
     $('hudRun').textContent = $('runId').textContent;
     $('hudMode').textContent = sum.mode ? sum.mode.toUpperCase() : '';
     document.title = ($('runId').textContent || 'Replay') + ' · Replay viewer';
@@ -891,7 +917,8 @@
     const runId = $('runId').textContent;
     const scen = (res.scenario && res.scenario.name) || (man.scenario && man.scenario.name) || '';
     const synthetic = !!(st.source && st.source.kind === 'synthetic');
-    const vtxt = sum.verdict === 'pass' ? 'PASS' : sum.verdict === 'fail' ? 'FAIL' : 'NO RESULT';
+    const vl = verdictLabels(sum);
+    const vtxt = vl.word;
     const tone = sum.verdict === 'pass' ? '#2fd16b' : sum.verdict === 'fail' ? '#cf3a2c' : '#77818b';
     const fr = res.failure_reason && typeof res.failure_reason === 'object' ? String(res.failure_reason.code) : '';
     const metrics = [];
@@ -903,10 +930,10 @@
     return {
       title: { ey: 'PRECISION LANDING LAB', tt: 'Rooftop vertiport landing', sb: 'Simulation · procedural city, not a real place' },
       run: { ey: 'RUN', tt: runId, sb: [scen, sum.mode ? 'mode ' + sum.mode : '', isNum(res.seed) ? 'seed ' + res.seed : '', synthetic ? 'synthetic data' : ''].filter(Boolean).join(' · ') },
-      result: { ey: 'RESULT · REPORTED BY THE RUNNER', tt: vtxt + (fr ? ' · ' + fr.replace(/_/g, ' ') : ''), sb: metrics.join(' · '), tone },
+      result: { ey: vl.resultEy, tt: vtxt + (fr ? ' · ' + fr.replace(/_/g, ' ') : ''), sb: metrics.join(' · '), tone },
       outro: {
         ey: 'PRECISION LANDING LAB · REPLAY', tt: runId, verdict: vtxt + (fr ? ' · ' + fr.replace(/_/g, ' ').toUpperCase() : ''), tone, rows,
-        foot: 'Simulation only.' + (synthetic ? ' Synthetic sample data.' : '') + ' PASS/FAIL is the runner\'s reported outcome, not an acceptance decision.' + (rows.some((r) => / \*$/.test(r.k)) ? ' * derived from telemetry.' : ''),
+        foot: 'Simulation only.' + (synthetic ? ' Synthetic sample data.' : '') + vl.foot + (rows.some((r) => / \*$/.test(r.k)) ? ' * derived from telemetry.' : ''),
       },
     };
   }
@@ -1121,7 +1148,7 @@
 
   function renderHeaderEmpty() {
     $('runId').textContent = 'No run loaded';
-    state.summary = { verdict: 'unknown', mode: null, rows: [] };
+    state.summary = { verdict: 'unknown', mode: null, rows: [], source: 'none' };
     $('pills').textContent = '';
     showBanner('');
     syncEmpty();
