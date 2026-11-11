@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "run_id": "sample-m3-preview",
+  "seed": 23,
+  "scenario": {
+    "name": "m3-camera-preview"
+  },
+  "mode": "camera",
+  "success": true,
+  "failure_reason": null,
+  "duration_us": 34000000,
+  "tlog_records": 376,
+  "horizontal_error_m": 0.062,
+  "touchdown_speed_mps": 0.31,
+  "time_to_land_s": 11.6,
+  "events": [
+    {
+      "t_us": 0,
+      "kind": "run_started",
+      "source": "runner"
+    },
+    {
+      "t_us": 1500000,
+      "kind": "mode_guided",
+      "source": "runner"
+    },
+    {
+      "t_us": 2000000,
+      "kind": "armed",
+      "source": "runner"
+    },
+    {
+      "t_us": 2000000,
+      "kind": "state:takeoff",
+      "source": "runner"
+    },
+    {
+      "t_us": 7500000,
+      "kind": "state:search",
+      "source": "runner"
+    },
+    {
+      "t_us": 9200000,
+      "kind": "target_acquired",
+      "source": "runner"
+    },
+    {
+      "t_us": 12000000,
+      "kind": "state:approach",
+      "source": "runner"
+    },
+    {
+      "t_us": 18000000,
+      "kind": "state:descend",
+      "source": "runner"
+    },
+    {
+      "t_us": 23300000,
+      "kind": "target_lost",
+      "source": "runner"
+    },
+    {
+      "t_us": 23900000,
+      "kind": "target_reacquired",
+      "source": "runner"
+    },
+    {
+      "t_us": 27000000,
+      "kind": "mode_land",
+      "source": "runner"
+    },
+    {
+      "t_us": 29600000,
+      "kind": "touchdown",
+      "source": "runner"
+    },
+    {
+      "t_us": 29800000,
+      "kind": "state:landed",
+      "source": "runner"
+    },
+    {
+      "t_us": 31000000,
+      "kind": "disarmed",
+      "source": "runner"
+    },
+    {
+      "t_us": 34000000,
+      "kind": "run_succeeded",
+      "source": "runner"
+    }
+  ]
+}

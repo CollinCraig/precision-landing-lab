@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Replay Viewer</title>
-<meta name="description" content="Replay a saved precision-landing simulation run: 3D city and rooftop vertiport view, timeline, altitude and vertical-speed charts. Simulation only.">
+<meta name="description" content="Replay a saved precision-landing simulation run: 3D city and rooftop vertiport view, onboard camera preview with the M3 HUD, cinematic mode, timeline, altitude and vertical-speed charts. Simulation only.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -52,6 +52,14 @@
           <div class="rd"><span class="k">VS</span><b id="hudVs">–</b><span class="u">m/s</span></div>
         </div>
       </div>
+      <div id="onbTag" class="onb-tag" aria-hidden="true" hidden><span class="dot"></span>ONBOARD CAM ↓ <b>SIMULATED PREVIEW</b></div>
+      <svg id="m3hud" class="m3hud" viewBox="0 0 1280 720" aria-hidden="true" hidden></svg>
+      <div id="pip" class="pip" hidden>
+        <svg id="pipSvg" class="pip-svg" viewBox="0 0 640 480" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="pip-label" aria-hidden="true"><span class="dot"></span><span id="pipLabel">ONBOARD ↓</span> <b id="pipSub">SIMULATED PREVIEW</b></div>
+        <button id="pipSwap" class="pip-swap" type="button" title="Swap main view and inset (V)" aria-label="Swap main view and inset"></button>
+      </div>
+      <div id="cine" class="cine" aria-hidden="true" hidden></div>
       <div class="rec-progress"><div id="recBand" class="band"></div><i class="rec-head"></i></div>
       <button id="recExit" class="rec-exit" type="button" aria-label="Exit recording mode" title="Exit recording mode (Esc)"></button>
     </section>
@@ -62,6 +70,13 @@
         <button type="button" data-cam="orbit" aria-pressed="false" title="Free orbit camera">Orbit</button>
         <button type="button" data-cam="top" aria-pressed="false" title="Top-down camera, north up">Top</button>
         <button type="button" data-cam="city" aria-pressed="false" title="Wide city establishing shot">City</button>
+        <button type="button" data-cam="pad" aria-pressed="false" title="Low view across the pad">Pad</button>
+      </div>
+      <div id="viewSeg" class="speeds" role="group" aria-label="Onboard camera and presentation">
+        <button type="button" id="pipBtn" aria-pressed="false" title="Onboard camera inset (O). Simulated preview; real frames come from Gazebo in M2">Onboard</button>
+        <button type="button" id="swapBtn" aria-pressed="false" title="Swap main view and inset (V)">Swap</button>
+        <button type="button" id="hudBtn" aria-pressed="false" title="M3 HUD over the onboard view (H)">M3 HUD</button>
+        <button type="button" id="cineBtn" aria-pressed="false" title="Cinematic mode (K): intro, auto cuts, titles, outro">Cinematic</button>
       </div>
       <div id="todSeg" class="speeds" role="group" aria-label="Time of day">
         <button type="button" data-tod="day" aria-pressed="false" title="Time of day (L cycles)">Day</button>
@@ -109,8 +124,9 @@
   </main>
 
   <footer class="chrome">
-    Simulation only; no real vehicles or airspace. The city is a procedural model, not a real place. Keys: <kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> step · <kbd>1</kbd>–<kbd>4</kbd> speed · <kbd>C</kbd> camera · <kbd>L</kbd> time of day · <kbd>Q</kbd> quality · <kbd>R</kbd> recording mode · <kbd>T</kbd> theme.
-    URL: <code>?run=&lt;dir&gt;&amp;t=&lt;s&gt;&amp;autoplay=1&amp;speed=2&amp;rec=1&amp;theme=dark&amp;cam=chase|orbit|top|city&amp;tod=day|golden|dusk&amp;q=low|high&amp;wind=&lt;from_deg&gt;,&lt;m/s&gt;</code>
+    Simulation only; no real vehicles or airspace. The city is a procedural model, not a real place. Keys: <kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> step · <kbd>1</kbd>–<kbd>4</kbd> speed · <kbd>C</kbd> camera · <kbd>L</kbd> time of day · <kbd>Q</kbd> quality · <kbd>O</kbd> onboard inset · <kbd>V</kbd> swap views · <kbd>H</kbd> M3 HUD · <kbd>K</kbd> cinematic · <kbd>R</kbd> recording mode · <kbd>T</kbd> theme.
+    The onboard camera is a simulated preview from this 3D scene; real camera frames come from Gazebo in M2.
+    URL: <code>?run=&lt;dir&gt;&amp;t=&lt;s&gt;&amp;autoplay=1&amp;speed=2&amp;rec=1&amp;theme=dark&amp;cam=chase|orbit|top|city|pad&amp;tod=day|golden|dusk&amp;q=low|high&amp;wind=&lt;from_deg&gt;,&lt;m/s&gt;&amp;pip=0|1&amp;view=onboard&amp;hud=0|1&amp;cfov=&lt;deg&gt;&amp;cres=640x480&amp;cine=1</code>
   </footer>
 </div>
 <!-- three.js r170 and its addons, pinned to exact versions. If they fail to load, the viewer still runs without the 3D view. -->
@@ -122,7 +138,7 @@
 </script>
 <script type="module">
 try {
-  const [T, sky, ec, rp, ub, op, bgu] = await Promise.all([
+  const [T, sky, ec, rp, ub, op, bgu, smaa] = await Promise.all([
     import('three'),
     import('three/addons/objects/Sky.js'),
     import('three/addons/postprocessing/EffectComposer.js'),
@@ -130,11 +146,12 @@ try {
     import('three/addons/postprocessing/UnrealBloomPass.js'),
     import('three/addons/postprocessing/OutputPass.js'),
     import('three/addons/utils/BufferGeometryUtils.js'),
+    import('three/addons/postprocessing/SMAAPass.js'),
   ]);
   window.THREE = T;
-  window.THREEX = { Sky: sky.Sky, EffectComposer: ec.EffectComposer, RenderPass: rp.RenderPass, UnrealBloomPass: ub.UnrealBloomPass, OutputPass: op.OutputPass, mergeGeometries: bgu.mergeGeometries };
+  window.THREEX = { Sky: sky.Sky, EffectComposer: ec.EffectComposer, RenderPass: rp.RenderPass, UnrealBloomPass: ub.UnrealBloomPass, OutputPass: op.OutputPass, SMAAPass: smaa.SMAAPass, mergeGeometries: bgu.mergeGeometries };
 } catch (e) { console.warn('three.js unavailable:', e); }
-for (const src of ['world-core.js', 'world.js', 'app.js']) {
+for (const src of ['world-core.js', 'hud-core.js', 'cine-core.js', 'world.js', 'present.js', 'app.js']) {
   await new Promise((done) => { const s = document.createElement('script'); s.src = src; s.onload = s.onerror = done; document.body.appendChild(s); });
 }
 </script>

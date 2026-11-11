@@ -1,9 +1,15 @@
 /* Precision Landing Lab: 3D city + rooftop vertiport scene (browser only).
  *
  * Needs globals THREE (three.js r170) and THREEX (Sky, EffectComposer,
- * RenderPass, UnrealBloomPass, OutputPass, mergeGeometries), loaded by
- * index.html, and PLVWorldCore (world-core.js). Everything is procedural:
+ * RenderPass, UnrealBloomPass, OutputPass, SMAAPass, mergeGeometries), loaded
+ * by index.html, and PLVWorldCore (world-core.js). Everything is procedural:
  * no external textures or models.
+ *
+ * Views: the scene camera (chase / orbit / top / city / pad) and an onboard
+ * downward camera (simulated preview of the M2 camera) share one renderer.
+ * One fills the canvas; the other can sit in a picture-in-picture rectangle.
+ * Layer 1 holds overlays (drone model, trail, drop line, ruler) that only the
+ * scene camera sees; the onboard camera sees layer 0 (the world) only.
  *
  * Axes: three.js world x = east, y = up, z = south. The pad deck top is the
  * origin, so the drone sits at (e, -d, -n) exactly as before. City coordinates
@@ -35,6 +41,14 @@
 
     const scene = new T.Scene();
     const camera = new T.PerspectiveCamera(46, 1, 0.05, 6000);
+    camera.layers.enable(1);
+    // onboard nadir camera: pinhole, horizontal FOV and sensor size from setOnboard().
+    // Layer 2 holds invisible shadow proxies of the drone, so the drone still casts
+    // its shadow when the onboard view is the first render of a frame.
+    const onb = new T.PerspectiveCamera(50, 4 / 3, 0.01, 3000);
+    onb.layers.enable(2);
+    const onbSpec = { width: 640, height: 480, hfov: 70, mountUp: 0.08 }; // lens just under the belly
+    renderer.shadowMap.autoUpdate = false; // updated once per frame, reused by the second view
 
     /* ================= procedural textures ================= */
     function canvasOf(w, h, draw) {
@@ -206,9 +220,16 @@
     const std = (o) => new T.MeshStandardMaterial(o);
     mats.facade = {};
     C.FACADES.forEach((f, k) => { mats.facade[f] = facadeMaterial(f, 100 + k * 17); });
-    mats.roof = std({ map: tex(flat('#a9a59d', 40, 5, 0), true), roughness: 0.95 });
-    mats.vroof = std({ map: tex(flat('#cfcbc2', 34, 6, 0), true), roughness: 0.95 });
-    mats.trim = std({ map: tex(flat('#bdb8ae', 22, 7, 6), true), roughness: 0.88 });
+    mats.roof = std({ map: tex(flat('#8f8b84', 40, 5, 0), true), roughness: 0.95 });
+    // vertiport roof: grey single-ply membrane, 1 m sheets with lap seams, a few patches
+    mats.vroof = std({ map: tex(canvasOf(256, 256, (g, w) => {
+      g.fillStyle = '#97938b'; g.fillRect(0, 0, w, w); speckle(g, w, w, 26, 6, 10);
+      g.fillStyle = 'rgba(0,0,0,0.10)'; for (let k = 0; k < 4; k++) g.fillRect(0, k * w / 4, w, 2);
+      g.fillStyle = 'rgba(255,255,255,0.05)'; for (let k = 0; k < 4; k++) g.fillRect(0, k * w / 4 + 2, w, 1);
+      const r = C.rng(41); g.fillStyle = 'rgba(30,30,30,0.06)';
+      for (let k = 0; k < 3; k++) g.fillRect(r() * w * 0.8, r() * w * 0.8, 18 + r() * 30, 14 + r() * 20);
+    }), true), roughness: 0.9 });
+    mats.trim = std({ map: tex(flat('#a7a297', 22, 7, 6), true), roughness: 0.88 });
     mats.metal = std({ color: 0xa3a9ae, roughness: 0.42, metalness: 0.75 });
     mats.dark = std({ color: 0x2c3136, roughness: 0.6, metalness: 0.4 });
     mats.asphalt = std({ map: tex(flat('#3b3e41', 26, 8, 30), true), roughness: 0.93 });
@@ -465,6 +486,25 @@
       for (let k = 0; k < 14; k++) { g.fillStyle = 'rgba(0,0,0,0.07)'; g.beginPath(); g.ellipse(c + (rr() - 0.5) * m(0.6), c + (rr() - 0.5) * m(0.6), m(0.06), m(0.02), rr() * 3, 0, 6.3); g.fill(); }
     });
     const padTex = tex(padCanvas, true, false);
+    // the tag again as its own plane with a 10 x 10 texel texture and nearest-neighbour
+    // magnification, so the onboard camera sees crisp cells even a few cm above it
+    (function crispTag() {
+      const c = canvasOf(10, 10, (g) => {
+        g.fillStyle = '#f4f4f0'; g.fillRect(0, 0, 10, 10);
+        g.fillStyle = '#121212'; g.fillRect(1, 1, 8, 8);
+        let seed = 11;
+        for (let r = 0; r < 6; r++) for (let k = 0; k < 6; k++) {
+          seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+          g.fillStyle = (seed >> 16) & 1 ? '#f4f4f0' : '#121212';
+          g.fillRect(2 + k, 2 + r, 1, 1);
+        }
+      });
+      const t = tex(c, true, false);
+      t.magFilter = T.NearestFilter; t.minFilter = T.LinearMipmapLinearFilter; t.generateMipmaps = true;
+      const m = new T.Mesh(new T.PlaneGeometry(0.3, 0.3), std({ map: t, roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+      m.rotation.x = -Math.PI / 2; m.position.y = 0.0015; m.receiveShadow = true;
+      vport.add(m);
+    })();
     const padMat = std({ map: padTex, roughness: 0.78, metalness: 0.12 });
     const padTop = new T.Mesh(new T.PlaneGeometry(V.safety_area, V.safety_area), padMat);
     padTop.rotation.x = -Math.PI / 2; padTop.position.y = 0.001; padTop.receiveShadow = true;
@@ -528,7 +568,24 @@
       const im = new T.InstancedMesh(new T.CylinderGeometry(0.024, 0.028, 0.03, 10), mats.padLight, pts.length);
       pts.forEach((p, i) => im.setMatrixAt(i, M4().makeTranslation(p[0], 0.015, p[1])));
       vport.add(im);
-      return im;
+      // glow: camera-facing halos (Points) plus a soft green pool on the deck around each light
+      const glowTex = tex(canvasOf(64, 64, (g) => {
+        const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+        gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.18, 'rgba(255,255,255,0.75)');
+        gr.addColorStop(0.45, 'rgba(255,255,255,0.18)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = gr; g.fillRect(0, 0, 64, 64);
+      }), true, false);
+      const hg = new T.BufferGeometry().setAttribute('position', new T.Float32BufferAttribute(pts.flatMap((p) => [p[0], 0.04, p[1]]), 3));
+      const haloMat = new T.PointsMaterial({ map: glowTex, color: 0x6dffa0, size: 0.2, sizeAttenuation: true, transparent: true, opacity: 0.6, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false });
+      const halos = new T.Points(hg, haloMat);
+      vport.add(halos);
+      const poolMat = new T.MeshBasicMaterial({ map: glowTex, color: 0x3dff86, transparent: true, opacity: 0.3, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 });
+      const pg = new T.PlaneGeometry(0.34, 0.34); pg.rotateX(-Math.PI / 2);
+      const pools = new T.InstancedMesh(pg, poolMat, pts.length);
+      pts.forEach((p, i) => pools.setMatrixAt(i, M4().makeTranslation(p[0], 0.003, p[1])));
+      pools.renderOrder = 3;
+      vport.add(pools);
+      return { mesh: im, haloMat, poolMat };
     })();
 
     // stair tower, HVAC, windsock (city coordinates, not rotated with the pad)
@@ -626,8 +683,9 @@
         add('carbon', new T.CylinderGeometry(0.021, 0.021, 0.026, 14), T4(mx, 0.012, mz));
         add('bell', new T.CylinderGeometry(0.019, 0.021, 0.014, 14), T4(mx, 0.032, mz));
         // landing legs under the motors
-        add('carbon', new T.CylinderGeometry(0.005, 0.006, 0.07, 6), T4(mx * 0.95, -0.035, mz * 0.95));
-        add('carbon', new T.SphereGeometry(0.009, 8, 6), T4(mx * 0.95, -0.07, mz * 0.95));
+        // (long enough to give the belly camera about 8 cm of clearance on the deck)
+        add('carbon', new T.CylinderGeometry(0.005, 0.006, 0.12, 6), T4(mx * 0.95, -0.06, mz * 0.95));
+        add('carbon', new T.SphereGeometry(0.009, 8, 6), T4(mx * 0.95, -0.12, mz * 0.95));
         // prop: two tapered blades + hub, spun about y
         const blade = new T.BoxGeometry(0.2, 0.003, 0.02);
         const bp = blade.attributes.position;
@@ -651,11 +709,33 @@
         drone.add(mesh);
       }
     })();
-    const GEAR = 0.078; // origin height above the skid feet
+    const GEAR = 0.128; // origin height above the skid feet
+    // nav LED halos (visible at golden hour and dusk)
+    const ledGlow = (function () {
+      const t = tex(canvasOf(32, 32, (g) => { const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16); gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.35, 'rgba(255,255,255,0.35)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32); }), true, false);
+      const mk = (leds, cols) => {
+        const g = new T.BufferGeometry();
+        g.setAttribute('position', new T.Float32BufferAttribute(leds.flatMap((l) => [l.position.x, l.position.y, l.position.z]), 3));
+        g.setAttribute('color', new T.Float32BufferAttribute(cols, 3));
+        const m = new T.PointsMaterial({ map: t, size: 0.09, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, blending: T.AdditiveBlending, toneMapped: false });
+        const p = new T.Points(g, m); drone.add(p); return m;
+      };
+      return { steady: mk([navLeds[0], navLeds[1]], [1, 0.15, 0.15, 0.2, 1, 0.4]), strobe: mk([navLeds[2], navLeds[3]], [1, 1, 1, 1, 1, 1]) };
+    })();
+    drone.traverse((o) => o.layers.set(1));
+    (function shadowProxies() {
+      const pm = new T.MeshBasicMaterial({ colorWrite: false, depthWrite: false });
+      drone.children.filter((o) => o.isMesh && o.castShadow && o.geometry.attributes.position.count > 200).forEach((o) => {
+        const p = new T.Mesh(o.geometry, pm); p.castShadow = true; p.receiveShadow = false;
+        p.position.copy(o.position); p.quaternion.copy(o.quaternion); p.layers.set(2);
+        drone.add(p);
+      });
+    })();
     scene.add(drone);
 
     const dropMat = new T.LineBasicMaterial({ color: 0x3fd0ee, transparent: true, opacity: 0.5, toneMapped: false });
     const drop = new T.Line(new T.BufferGeometry().setFromPoints([new T.Vector3(), new T.Vector3(0, -1, 0)]), dropMat);
+    drop.layers.set(1);
     scene.add(drop);
 
     /* ================= trail + altitude ruler ================= */
@@ -687,6 +767,7 @@
       const every = top > 12 ? 5 : 2;
       for (let a = every; a <= top; a += every) { const s = textSprite(a + ' m'); s.position.set(0.28, a, 0); ruler.add(s); }
       ruler.position.set(-sa - 0.45, 0, -sa - 0.45); // NW corner: behind the pad from the default chase view
+      ruler.traverse((o) => o.layers.set(1));
       scene.add(ruler);
     }
     function recolorTrail() {
@@ -712,6 +793,7 @@
       if (pts.length) {
         trail = new T.InstancedMesh(new T.CylinderGeometry(1, 1, 1, 6, 1, true), new T.MeshBasicMaterial({ toneMapped: false }), pts.length);
         trail.frustumCulled = false;
+        trail.layers.set(1);
         for (let i = 0; i < pts.length; i++) { const m = M4(); segMatrix(pts[i].p, pts[Math.min(i + 1, pts.length - 1)].p, m); segMats.push(m); trail.setMatrixAt(i, m); }
         scene.add(trail);
         recolorTrail();
@@ -725,6 +807,48 @@
     /* ================= sky, sun, environment ================= */
     const sky = X.Sky ? new X.Sky() : null;
     if (sky) { sky.scale.setScalar(5000); scene.add(sky); }
+    // Hand-tuned gradient sky for presets with tod.skyGrad (dusk): navy zenith,
+    // blue-violet horizon, warm glow toward the sun. Tone-mapped like the rest.
+    function gradientSky(radius) {
+      const u = {
+        zenith: { value: new T.Color() }, mid: { value: new T.Color() }, horizon: { value: new T.Color() },
+        glow: { value: new T.Color() }, glowHigh: { value: new T.Color() }, ground: { value: new T.Color() },
+        sunDir: { value: new T.Vector3(1, 0, 0) }, glowPower: { value: 5 }, glowWidth: { value: 0.3 },
+      };
+      const m = new T.ShaderMaterial({
+        uniforms: u, side: T.BackSide, depthWrite: false, fog: false,
+        vertexShader: 'varying vec3 vDir; void main(){ vDir = position; vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }',
+        fragmentShader: [
+          'uniform vec3 zenith, mid, horizon, glow, glowHigh, ground; uniform vec3 sunDir; uniform float glowPower, glowWidth;',
+          'varying vec3 vDir;',
+          'void main(){',
+          '  vec3 d = normalize(vDir); float h = d.y, hp = max(h, 0.0);',
+          '  vec3 col = mix(horizon, mid, smoothstep(0.0, 0.2, hp));',
+          '  col = mix(col, zenith, smoothstep(0.16, 0.8, hp));',
+          '  vec3 sd = normalize(vec3(sunDir.x, 0.0, sunDir.z) + 1e-5); vec3 dh = normalize(vec3(d.x, 0.0, d.z) + 1e-5);',
+          '  float az = max(dot(dh, sd), 0.0);',
+          '  float g = pow(az, glowPower) * exp(-hp / glowWidth);',
+          '  col = mix(col, mix(glow, glowHigh, smoothstep(0.02, 0.28, hp)), clamp(g, 0.0, 1.0) * 0.9);',
+          '  col += glow * 0.05 * exp(-hp / 0.06);',
+          '  if (h < 0.0) col = mix(horizon, ground, smoothstep(0.0, 0.06, -h));',
+          '  col += (fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453) - 0.5) / 255.0;',
+          '  gl_FragColor = vec4(col, 1.0);',
+          '  #include <tonemapping_fragment>',
+          '  #include <colorspace_fragment>',
+          '}',
+        ].join('\n'),
+      });
+      const mesh = new T.Mesh(new T.SphereGeometry(radius, 48, 24), m);
+      mesh.frustumCulled = false; mesh.renderOrder = -1; mesh.visible = false;
+      return mesh;
+    }
+    const gradSky = gradientSky(4500);
+    scene.add(gradSky);
+    function setGradient(mesh, g, dir) {
+      const u = mesh.material.uniforms;
+      for (const k of ['zenith', 'mid', 'horizon', 'glow', 'glowHigh', 'ground']) u[k].value.set(g[k]);
+      u.sunDir.value.copy(dir); u.glowPower.value = g.glowPower; u.glowWidth.value = g.glowWidth;
+    }
     const hemi = new T.HemisphereLight(0xbcd6ff, 0x8a8070, 0.7);
     scene.add(hemi);
     const sun = new T.DirectionalLight(0xffffff, 3);
@@ -734,6 +858,8 @@
     const pmrem = new T.PMREMGenerator(renderer);
     let envRT = null, envScene = null, envSky = null;
     if (X.Sky) { envScene = new T.Scene(); envSky = new X.Sky(); envSky.scale.setScalar(1000); envScene.add(envSky); }
+    const envGrad = envScene ? gradientSky(900) : null;
+    if (envGrad) envScene.add(envGrad);
     let tod = C.timeOfDay(opts.tod || 'day');
     const sunDir = new T.Vector3();
     function applyTod(name) {
@@ -746,7 +872,13 @@
         u.turbidity.value = tod.turbidity; u.rayleigh.value = tod.rayleigh; u.mieCoefficient.value = tod.mie; u.mieDirectionalG.value = tod.mieG;
         u.sunPosition.value.copy(sunDir);
       }
-      if (!sky) scene.background = new T.Color(tod.fog);
+      const grad = tod.skyGrad || null;
+      if (sky) sky.visible = !grad;
+      if (envSky) envSky.visible = !grad;
+      gradSky.visible = !!grad;
+      if (envGrad) envGrad.visible = !!grad;
+      if (grad) { setGradient(gradSky, grad, sunDir); if (envGrad) setGradient(envGrad, grad, sunDir); }
+      scene.background = sky || grad ? null : new T.Color(tod.fog);
       renderer.toneMappingExposure = tod.exposure;
       sun.color.set(tod.sunColor); sun.intensity = tod.sun;
       hemi.color.set(tod.hemiSky); hemi.groundColor.set(tod.hemiGround); hemi.intensity = tod.hemi;
@@ -760,12 +892,16 @@
       C.FACADES.forEach((f) => { mats.facade[f].emissiveIntensity = tod.windows; });
       mats.lamp.emissiveIntensity = tod.lights * 2.2;
       lamps.poolMat.opacity = Math.min(1, Math.max(0, (tod.lights - 0.8) / 2.2)) * 0.55;
-      mats.padLight.emissiveIntensity = 1.0 + tod.lights * 0.8;
+      mats.padLight.emissiveIntensity = 1.4 + tod.lights * 1.1;
+      padLights.haloMat.opacity = Math.min(1, 0.22 + tod.lights * 0.26);
+      padLights.haloMat.size = 0.14 + Math.min(tod.lights, 3) * 0.035;
+      padLights.poolMat.opacity = Math.min(0.75, 0.08 + tod.lights * 0.2);
+      ledGlow.steady.opacity = Math.min(0.9, Math.max(0, tod.lights - 0.6) * 0.45);
       mats.redLight.emissiveIntensity = tod.lights > 1 ? 4 : 0;
       obst.visible = tod.lights > 1;
       mats.flood.emissiveIntensity = tod.lights > 1 ? 6 : 0;
       floods.forEach((f) => { f.intensity = tod.lights > 1 ? 7 * tod.lights : 0; });
-      if (bloom) bloom.strength = tod.bloom;
+      if (bloom) { bloom.strength = tod.bloom; bloom.enabled = tod.bloom > 0; }
       applyQuality(quality);
     }
 
@@ -778,8 +914,11 @@
       composer = new X.EffectComposer(renderer, rt);
       composer.addPass(new X.RenderPass(scene, camera));
       bloom = new X.UnrealBloomPass(new T.Vector2(256, 256), tod.bloom, 0.4, 0.85);
+      bloom.enabled = tod.bloom > 0;
       composer.addPass(bloom);
       composer.addPass(new X.OutputPass());
+      // SMAA after the output transform: edges are found on the display-referred image
+      if (X.SMAAPass) composer.addPass(new X.SMAAPass(2, 2));
     }
     let shadowType = null;
     function applyQuality(q) {
@@ -792,7 +931,7 @@
       if (type !== shadowType) { shadowType = type; renderer.shadowMap.type = type; scene.traverse((o) => { if (o.material) [].concat(o.material).forEach((m) => { m.needsUpdate = true; }); }); }
       trees.leaf.castShadow = trees.trunk.castShadow = quality === 'high';
       sun.castShadow = tod.sun > 0.5;
-      if (quality === 'high' && tod.bloom > 0) buildComposer();
+      if (quality === 'high') buildComposer();
       resize();
     }
 
@@ -802,24 +941,38 @@
       orbit: { az: 0.6, pol: 1.12, dist: 13, target: new T.Vector3(0, 2.5, 0) },
       top: { zoom: 1 },
       city: { az: -0.25, zoom: 1 },
+      pad: { az: 0.5, zoom: 1 },
     };
-    const HOME = JSON.parse(JSON.stringify({ chase: CAM.chase, top: CAM.top, city: CAM.city }));
+    const HOME = JSON.parse(JSON.stringify({ chase: CAM.chase, top: CAM.top, city: CAM.city, pad: CAM.pad }));
+    // cinematic mode: slow automatic camera motion, no user state touched
+    const cine = { on: false, az0: 0.5, camT: 0 };
     let camMode = C.CAMERAS.includes(opts.cam) ? opts.cam : 'chase';
     let blend = null, clock = 0, curPose = null;
     const focus = new T.Vector3(0, 0, 0); // smoothed drone position
     const dronePos = new T.Vector3();
     function modePose(mode) {
       const d = { x: focus.x, y: focus.y, z: focus.z };
+      if (cine.on) {
+        const k = C.easeInOut(Math.min(1, cine.camT / 9));
+        if (mode === 'chase') return C.chasePose(d, { az: CAM.chase.az + 0.05 * Math.sin(clock * 0.11), pol: 1.16, zoom: 0.95 - 0.05 * k });
+        if (mode === 'orbit') return C.orbitPose(focus.x, focus.y * 0.82 + 0.2, focus.z, cine.az0 + cine.camT * 0.085, 1.2, Math.max(5.5, Math.max(0, focus.y) * 0.9 + 4.2), 40);
+        if (mode === 'top') return C.topPose(d, { zoom: 1 - 0.3 * k });
+        if (mode === 'pad') return C.padPose(d, cine.camT, { az: 0.5 });
+      }
       if (mode === 'chase') return C.chasePose(d, CAM.chase);
       if (mode === 'top') return C.topPose(d, CAM.top);
       if (mode === 'city') return C.cityPose(clock, CAM.city);
+      if (mode === 'pad') return C.padPose(d, clock, CAM.pad);
       const o = CAM.orbit;
       if (opts.follow && opts.follow()) o.target.lerp(dronePos, 0.12);
       return C.orbitPose(o.target.x, o.target.y, o.target.z, o.az, o.pol, o.dist, camera.aspect < 1.1 ? 52 : 40);
     }
-    function setCamera(mode, instant) {
+    function setCamera(mode, instant, dur) {
       if (!C.CAMERAS.includes(mode)) return;
-      if (curPose && !instant) blend = { from: Object.assign({}, curPose), t: 0, dur: mode === 'city' || camMode === 'city' ? 2.2 : 1.2 };
+      if (curPose && !instant) blend = { from: Object.assign({}, curPose), t: 0, dur: dur || (mode === 'city' || camMode === 'city' ? 2.2 : 1.2) };
+      else blend = null;
+      cine.camT = 0;
+      if (cine.on && mode === 'orbit') cine.az0 = Math.atan2(curPose ? curPose.px - focus.x : 1, curPose ? curPose.pz - focus.z : 1) + 0.8;
       camMode = mode;
       updateShadowFrustum();
     }
@@ -835,7 +988,7 @@
       sun.target.updateMatrixWorld();
     }
     function resetView(silent) {
-      Object.assign(CAM.chase, HOME.chase); Object.assign(CAM.top, HOME.top); Object.assign(CAM.city, HOME.city);
+      Object.assign(CAM.chase, HOME.chase); Object.assign(CAM.top, HOME.top); Object.assign(CAM.city, HOME.city); Object.assign(CAM.pad, HOME.pad);
       const o = CAM.orbit; o.az = 0.6; o.pol = 1.12; o.dist = Math.max(10, maxAlt * 1.7 + 5.5); o.target.set(0, Math.max(2.2, maxAlt * 0.5), 0);
       if (!silent && curPose) blend = { from: Object.assign({}, curPose), t: 0, dur: 0.8 };
     }
@@ -847,12 +1000,12 @@
       const c = CAM[camMode];
       if (camMode === 'top') return;
       c.az -= dx * 0.007;
-      if (camMode !== 'city') c.pol = Math.min(1.5, Math.max(0.12, c.pol - dy * 0.007));
+      if (camMode !== 'city' && camMode !== 'pad') c.pol = Math.min(1.5, Math.max(0.12, c.pol - dy * 0.007));
     }
     function zoom(f) {
       const c = CAM[camMode];
       if (camMode === 'orbit') c.dist = Math.min(80, Math.max(2.5, c.dist * f));
-      else c.zoom = Math.min(camMode === 'city' ? 2.5 : 6, Math.max(0.35, c.zoom * f));
+      else c.zoom = Math.min(camMode === 'city' ? 2.5 : camMode === 'pad' ? 2 : 6, Math.max(camMode === 'pad' ? 0.6 : 0.35, c.zoom * f));
     }
     canvas.addEventListener('pointerdown', (ev) => { canvas.setPointerCapture(ev.pointerId); pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY }); moved = 0; pinch0 = 0; });
     canvas.addEventListener('pointermove', (ev) => {
@@ -872,6 +1025,61 @@
     canvas.addEventListener('pointercancel', up);
     canvas.addEventListener('wheel', (ev) => { ev.preventDefault(); zoom(Math.exp(ev.deltaY * 0.001)); }, { passive: false });
 
+    /* ================= onboard camera + views ================= */
+    // views: {main: 'scene' | 'onboard', inset: rect | null, image: rect | null}; rects in CSS px, top-left origin
+    let views = { main: 'scene', inset: null, image: null };
+    function setOnboard(spec) {
+      Object.assign(onbSpec, spec || {});
+      const a = onbSpec.width / onbSpec.height;
+      onb.aspect = a;
+      onb.fov = (2 * Math.atan(Math.tan((onbSpec.hfov * Math.PI) / 360) / a) * 180) / Math.PI;
+      onb.updateProjectionMatrix();
+    }
+    function placeOnboard() {
+      // nadir, roll/pitch stabilised; image top = heading (matches PLVHud.projectNadir)
+      const y = (curHdg * Math.PI) / 180;
+      onb.position.set(dronePos.x, dronePos.y + onbSpec.mountUp, dronePos.z);
+      onb.up.set(Math.sin(y), 0, -Math.cos(y));
+      onb.lookAt(onb.position.x, onb.position.y - 1, onb.position.z);
+    }
+    const useComposer = () => composer && quality === 'high';
+    function viewport(r, H) {
+      renderer.setViewport(r.x, H - r.y - r.h, r.w, r.h);
+      renderer.setScissor(r.x, H - r.y - r.h, r.w, r.h);
+    }
+    function renderViews(dt) {
+      const W = container.clientWidth, H = container.clientHeight;
+      if (!W || !H) return;
+      renderer.shadowMap.needsUpdate = true; // first render of the frame refreshes the shadow map
+      const showOnb = hasSample;
+      if (views.main !== 'onboard' || !views.image) {
+        if (useComposer()) composer.render(dt); else renderer.render(scene, camera);
+        if (views.inset && showOnb) {
+          renderer.setScissorTest(true);
+          viewport(views.inset, H);
+          renderer.render(scene, onb);
+          renderer.setScissorTest(false);
+          renderer.setViewport(0, 0, W, H);
+        }
+        return;
+      }
+      // onboard view fills the image rect (pillarboxed); scene camera in the inset, drawn last
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, W, H);
+      renderer.setClearColor(0x000000, 1);
+      renderer.clear();
+      renderer.setScissorTest(true);
+      if (showOnb) { viewport(views.image, H); renderer.render(scene, onb); }
+      if (views.inset) {
+        viewport(views.inset, H);
+        camera.aspect = views.inset.w / views.inset.h; camera.updateProjectionMatrix();
+        renderer.render(scene, camera);
+        camera.aspect = W / H; camera.updateProjectionMatrix();
+      }
+      renderer.setScissorTest(false);
+      renderer.setViewport(0, 0, W, H);
+    }
+
     function resize() {
       const w = container.clientWidth, h = container.clientHeight;
       if (!w || !h) return;
@@ -884,10 +1092,10 @@
 
     /* ================= per-sample update + per-frame render ================= */
     const tmp = new T.Vector3(), prev = new T.Vector3(), qYaw = new T.Quaternion(), qTilt = new T.Quaternion();
-    let curArmed = 0, hasSample = false, spin = 0, firstSample = true;
+    let curArmed = 0, hasSample = false, spin = 0, firstSample = true, curHdg = 0;
     function update(s) {
-      hasSample = !!s;
-      if (!s) { drone.visible = drop.visible = false; if (trail) trail.count = 0; return; }
+      hasSample = !!s && !!store;
+      if (!s || !store) { drone.visible = drop.visible = false; if (trail) trail.count = 0; return; }
       drone.visible = drop.visible = true;
       tmp.set(s.e - store.pad.e, -s.d, -(s.n - store.pad.n));
       dronePos.copy(tmp);
@@ -901,7 +1109,7 @@
       qYaw.setFromAxisAngle(yAxis, -(s.hdg * Math.PI) / 180);
       if (ang > 1e-4) qTilt.setFromAxisAngle(new T.Vector3(-vz, 0, vx).normalize(), -ang); else qTilt.identity();
       drone.quaternion.copy(qTilt).multiply(qYaw);
-      curArmed = s.armed;
+      curArmed = s.armed; curHdg = s.hdg;
       const onDeck = Math.abs(tmp.x) < sa && Math.abs(tmp.z) < sa;
       const gy = onDeck ? 0 : ROOF;
       drop.position.copy(tmp); drop.scale.set(1, Math.max(0.001, tmp.y - gy), 1);
@@ -929,6 +1137,8 @@
       // nav LEDs: steady red/green, white rear strobes double-flash
       const ph = clock % 1.2, strobe = ph < 0.05 || (ph > 0.15 && ph < 0.2);
       navLeds[2].material.emissiveIntensity = navLeds[3].material.emissiveIntensity = strobe ? 12 : 0.2;
+      ledGlow.strobe.opacity = strobe ? Math.min(1, 0.25 + tod.lights * 0.3) : 0;
+      cine.camT += dt;
       // windsock: points downwind, droops in light wind, flutters
       if (sock) {
         const w = opts.wind ? opts.wind() : V.wind;
@@ -951,13 +1161,18 @@
         if (blend.t >= blend.dur) blend = null;
       }
       curPose = pose;
-      if (ruler) ruler.visible = camMode === 'chase' || camMode === 'orbit';
+      if (ruler) ruler.visible = !cine.on && (camMode === 'chase' || camMode === 'orbit');
+      // the low pad shot looks across the pad; the trail and drop line would fill it as a pole
+      const lowShot = cine.on && camMode === 'pad';
+      if (trail) trail.visible = !lowShot;
+      drop.visible = hasSample && !lowShot;
       camera.position.set(pose.px, pose.py, pose.pz);
       camera.lookAt(pose.tx, pose.ty, pose.tz);
       if (Math.abs(camera.fov - pose.fov) > 0.01) { camera.fov = pose.fov; camera.updateProjectionMatrix(); }
       placeSun();
+      placeOnboard();
       renderer.info.reset();
-      if (composer && quality === 'high' && tod.bloom > 0) composer.render(dt); else renderer.render(scene, camera);
+      renderViews(dt);
       last = { calls: renderer.info.render.calls, triangles: renderer.info.render.triangles };
       fpsAcc += dt; fpsN++;
       if (fpsAcc >= 1) { fps = fpsN / fpsAcc; fpsAcc = 0; fpsN = 0; }
@@ -968,10 +1183,14 @@
       refreshTheme() { recolorTrail(); },
       resetView() { resetView(false); },
       setCamera, setTimeOfDay: applyTod, setQuality: applyQuality,
+      setOnboard, setViews(v) { views = Object.assign({ main: 'scene', inset: null, image: null }, v || {}); },
+      setCine(on) { cine.on = !!on; cine.camT = 0; },
+      get onboardSpec() { return Object.assign({}, onbSpec); },
       get camera() { return camMode; }, get timeOfDay() { return tod.name; }, get quality() { return quality; },
       stats() { return { fps: Math.round(fps * 10) / 10, calls: last.calls, triangles: last.triangles, quality, camera: camMode, tod: tod.name, buildings: city.buildings.length, context: contextList.length }; },
     };
     updateShadowFrustum();
+    setOnboard({});
     applyTod(tod.name);
     resize();
     return api;

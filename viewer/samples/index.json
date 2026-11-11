@@ -10,5 +10,12 @@
       "label": "Failure: altitude timeout, abort and land (synthetic)",
       "path": "samples/sample-timeout-failure/"
     }
+  ],
+  "previews": [
+    {
+      "id": "sample-m3-preview",
+      "label": "M3 preview: search, approach, descend with estimates (synthetic)",
+      "path": "samples/sample-m3-preview/"
+    }
   ]
 }
