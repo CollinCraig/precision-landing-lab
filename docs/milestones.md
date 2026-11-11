@@ -2,8 +2,8 @@
 
 Each milestone: **brief approved by Collin → agents build + review → Collin's
 pieces → <30 min demo with video → Collin accepts or sends back.**
-Timeboxes are wall-clock with Collin at 3–5 h/week; hitting a timebox means
-stop and re-scope together, not push harder.
+Durations are rough guides, not deadlines. Collin works when he is available;
+that time varies a lot. Agent work never waits on a fixed weekly schedule.
 
 ## M0 — Inventory & proposals (≈1 week · read-only)
 
