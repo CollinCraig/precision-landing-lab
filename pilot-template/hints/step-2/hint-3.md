@@ -1,15 +1,11 @@
-# Step 2, hint 3: fields
+# Step 2, hint 3: design help
 
-This file is optional. It gives field references, not a working state.
+This file is optional. It gives design help, not names. The names are in `API.md`.
 
-| Item | Reference |
-|---|---|
-| Mode request | `ap.set_mode(value)`. ArduCopter GUIDED is `mavlite.MODE_GUIDED` (value 4). |
-| Mode proof | `HEARTBEAT.custom_mode` |
-| Arm request | `ap.send_command(mavlite.CMD_COMPONENT_ARM_DISARM, 1)`. Parameter 1 is 1 to arm. |
-| Arm proof | `HEARTBEAT.base_mode` has the bit `mavlite.BASE_MODE_ARMED` (value 128). |
-| ACK result | `COMMAND_ACK.result`. 0 is ACCEPTED. `mavlite.RESULT_NAMES` lists the names. |
-
-- Use failure code `command_rejected` for a refusal. Use `timeout` when nothing happens.
+- Three events are different: your request, the ACK and the state change.
+- Question: Which heartbeat counts as proof? One from before your request, or one from after it?
+- Question: A refusal and a silence are different faults. Which failure code fits each? See `API.md`.
+- Run `./learn fake --fault arm_denied`. Read the lines before the ACK. They give the reason.
+- Put the state name in the failure detail.
 
 Write the number of the highest hint file that you opened in the column "Hint file" of `progress.md`. All hint files are help level 2.

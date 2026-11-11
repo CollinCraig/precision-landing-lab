@@ -38,7 +38,7 @@ Your code must find out for itself when the autopilot is ready. See `hints/step-
 
 Telemetry can stop. The autopilot can refuse a command. A state can never arrive.
 If your code waits with no limit, it waits for ever.
-Give each wait its own time limit. The platform gives the limits in `budgets`.
+Give each wait its own time limit. The platform gives the limits in `budgets`. `API.md` lists them.
 When a limit ends, report a failure. Name the state in the failure detail.
 
 ## Idea 4: units and thresholds
@@ -54,13 +54,14 @@ The platform gives this list. The design of each state is your work.
 
 ## What you see when you run
 
-The tool prints every ACK and every STATUSTEXT to `mission.stderr`. Example lines:
+The tool prints every ACK and every STATUSTEXT to `mission.stderr`. The reason comes before the ACK. Example lines:
 
     [  3.20s] [send] COMMAND_LONG 400 (1,)
-    [  3.25s] [ack] COMMAND_ACK command=400 result=4 (FAILED)
     [  3.25s] [text] STATUSTEXT severity=3 text='Arm: Need Position Estimate'
+    [  3.25s] [ack] COMMAND_ACK command=400 result=4 (FAILED)
 
-Read these lines first when a test fails.
+The text differs with the cause. The fake uses `PreArm: Compass not healthy` for the fault `arm_denied`.
+Read these lines first when a test fails. `API.md` lists all names and fault names.
 
 ## Time
 

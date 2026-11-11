@@ -49,13 +49,14 @@ The numbers and the state list are given openly. The design of each state is the
 
 ### `budgets` (class `Budgets`)
 
-One time limit in seconds for each wait: `connect_s`, `ready_s`, `guided_s`, `arm_s`, `climb_s`, `hold_s`, `disarm_s`.
+One time limit in seconds for each wait: `connect_s`, `ready_s`, `guided_s`, `arm_s`, `takeoff_s`, `climb_s`, `hold_s`, `telemetry_gap_s`, `disarm_s`.
+`hold_s` is the hold time. `telemetry_gap_s` is the longest silence in HOLD. The learner page `pilot-template/API.md` lists all values.
 There are two profiles. The values come from the first real SITL flight (review A-03).
 
-| Profile | Use | ready_s | climb_s | disarm_s |
-|---|---|---|---|---|
-| `fake` | Fake autopilot tests | 2 | 2 | 2 |
-| `sitl` | Real SITL. Readiness took 37 s. Landing from 5 m took 13 s. | 120 | 20 | 40 |
+| Profile | Use | ready_s | takeoff_s | climb_s | telemetry_gap_s | disarm_s |
+|---|---|---|---|---|---|---|
+| `fake` | Fake autopilot tests | 2 | 2 | 2 | 1 | 2 |
+| `sitl` | Real SITL. Readiness took 37 s. Landing from 5 m took 13 s. | 120 | 10 | 20 | 3 | 40 |
 
 The hold is 5 s in both profiles. A SITL run needs a runner `--timeout` of 240 s.
 
@@ -86,9 +87,9 @@ python -m lab.run --pilot <folder> --profile sitl --runs <dir> --run-id <id> --s
 - `tests/test_pilot_steps.py` has four classes: `Step1Tests` to `Step4Tests`. Each class is one step.
 - The tests run only when `M1_PILOT` is set, or through `scripts/learn step N`. Platform CI skips them.
 - The fake follows the real flight. The heartbeat says STANDBY from the start. Arming is refused until GPS has a fix and the EKF uses GPS.
-  The fake sends COMMAND_ACK and STATUSTEXT.
+  The fake sends COMMAND_ACK and STATUSTEXT. A refusal sends the STATUSTEXT reason first, then the ACK.
 - Faults: no heartbeat, never ready, mode stuck, arm ACK accepted but no state change, arm refused, climb stuck,
-  telemetry lost, disarm stuck.
+  telemetry lost (no takeoff ACK), telemetry lost in HOLD, disarm stuck. The learner runs one fault with `scripts/learn fake --fault NAME`.
 - The fake proves the sequence of requests and proofs. It does not prove flight safety.
 - `tests/test_m1_sitl.py` is the opt-in SITL check. It needs `M1_PILOT` and a human-approved SITL run.
 
@@ -99,8 +100,9 @@ python -m lab.run --pilot <folder> --profile sitl --runs <dir> --run-id <id> --s
 | `scripts/learn init` | Create the pilot repository. Default `~/Projects/landing-pilot`. `--pilot <path>` or `LANDING_PILOT` changes the path. |
 | `scripts/learn status` | Run all steps. Show the next action. |
 | `scripts/learn step N` | Run the tests of step N. Show the first failure and the next action. |
+| `scripts/learn fake --fault NAME` | Run the mission once against the fake autopilot. Print the log and the result. |
 | `scripts/learn doctor` | Check the platform path, the platform pin and the interface number. |
-| `scripts/learn listen` | Print decoded messages from a running SITL (`--endpoint`) or from a tlog file (`--replay`). |
+| `scripts/learn listen` | Print decoded messages from a running SITL (`--endpoint`) or from a tlog file (`--replay`). With no packets it says that SITL is probably not running. |
 
 `scripts/learn init` refuses a folder that is not empty. It adds no remote. It makes exactly one commit.
 The agent identity comes from D-036. `LEARN_AGENT_MODEL` sets the model name in the identity.

@@ -92,6 +92,19 @@ class EquipmentTests(unittest.TestCase):
         fake.write(wire(76, struct.pack("<7fHBBB", 0, 0, 0, 0, 0, 0, 0, 21, 1, 1, 0)))
         self.assertEqual(len(fake.violations), 2)
 
+    def test_a_refused_arm_sends_the_reason_before_the_ack(self):
+        """Real ArduPilot sends the STATUSTEXT first. A pilot that stops at the ACK still has the reason in its log."""
+        for fault, text in (("arm_denied", b"PreArm: Compass not healthy"), (None, b"Arm: Need Position Estimate")):
+            fake = FakeAutopilot(fault, clock=lambda: 0.0)
+            if fault:
+                fake.ready_observed = fake.guided_observed = True
+                fake.mode = 4
+            fake.write(wire(76, struct.pack("<7fHBBB", 1, 0, 0, 0, 0, 0, 0, 400, 1, 1, 0)))
+            ids = [unpack_wire(packet)[0] for packet in fake.pending]
+            self.assertEqual(ids, [253, 77], fault)
+            self.assertIn(text, unpack_wire(fake.pending[0])[1])
+            self.assertEqual(unpack_wire(fake.pending[1])[1][2], 4, "ACK result 4 is FAILED")
+
     def test_fake_faults_and_elapsed_altitude(self):
         now = [0.0]
         fake = FakeAutopilot(clock=lambda: now[0])

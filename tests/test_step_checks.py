@@ -59,6 +59,32 @@ class StepCheckTests(unittest.TestCase):
                          step_us=1_000_000, duration=7_500_000)
         self.assertEqual(steps.hold_us(stopped), 500_000)
 
+    def bounded(self, fault, phase, seen, detail, elapsed=1.0, also=()):
+        """Run assert_bounded_failure on a made-up result. It uses no pilot and no fake autopilot."""
+        class Canned(steps.PilotCase):
+            def exercise(inner, fault=None):
+                inner.stderr_tail = ""
+                return FakeAutopilot(), record(seen, "timeout", detail), elapsed
+        Canned("phases").assert_bounded_failure(fault, phase, 6, also=also)
+
+    def test_telemetry_lost_after_takeoff_accepts_a_failure_in_takeoff_or_in_climb(self):
+        args = ("telemetry_lost", "TAKEOFF")
+        self.bounded(*args, PHASES[:5], "TAKEOFF: no ACK", also=("CLIMB",))  # waited for the ACK
+        self.bounded(*args, PHASES[:6], "CLIMB: no height", also=("CLIMB",))  # entered CLIMB first
+        with self.assertRaises(AssertionError) as caught:  # the detail names no allowed state
+            self.bounded(*args, PHASES[:5], "WAIT_DISARM: no", also=("CLIMB",))
+        self.assertIn("The failure detail was", str(caught.exception))
+        self.assertIn("TAKEOFF or CLIMB", str(caught.exception))
+        with self.assertRaises(AssertionError) as caught:  # the pilot never entered TAKEOFF
+            self.bounded(*args, PHASES[:4], "TAKEOFF: no ACK", also=("CLIMB",))
+        self.assertIn("The pilot entered these states: CONNECT, WAIT_READY, SET_GUIDED, ARM", str(caught.exception))
+        self.assertIn("expected the state TAKEOFF", str(caught.exception))
+
+    def test_a_slow_failure_names_the_elapsed_time_and_the_limit(self):
+        with self.assertRaises(AssertionError) as caught:
+            self.bounded("climb_stuck", "CLIMB", PHASES[:6], "CLIMB: slow", elapsed=9.0)
+        self.assertIn("The run took 9.0 seconds", str(caught.exception))
+
     def test_the_fake_stops_telemetry_one_second_into_hold(self):
         now = [100.0]
         fake = FakeAutopilot("telemetry_lost_hold", clock=lambda: now[0])

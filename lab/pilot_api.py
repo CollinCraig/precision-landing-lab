@@ -29,16 +29,24 @@ class Budgets:
     ready_s: float
     guided_s: float
     arm_s: float
+    takeoff_s: float
     climb_s: float
     hold_s: float
+    telemetry_gap_s: float
     disarm_s: float
+
+
+# Failure codes that `ap.fail` accepts.
+FAIL_CODES = ("timeout", "readiness_failed", "command_rejected", "connection_failed", "mission_exception")
 
 
 # "fake" values suit the fake autopilot. "sitl" values come from the first real flight
 # (readiness at 37 s, landing from 5 m in 13 s), with margin.
 PROFILES = {
-    "fake": Budgets(connect_s=2.0, ready_s=2.0, guided_s=2.0, arm_s=2.0, climb_s=2.0, hold_s=5.0, disarm_s=2.0),
-    "sitl": Budgets(connect_s=10.0, ready_s=120.0, guided_s=10.0, arm_s=10.0, climb_s=20.0, hold_s=5.0, disarm_s=40.0),
+    "fake": Budgets(connect_s=2.0, ready_s=2.0, guided_s=2.0, arm_s=2.0, takeoff_s=2.0, climb_s=2.0,
+                    hold_s=5.0, telemetry_gap_s=1.0, disarm_s=2.0),
+    "sitl": Budgets(connect_s=10.0, ready_s=120.0, guided_s=10.0, arm_s=10.0, takeoff_s=10.0, climb_s=20.0,
+                    hold_s=5.0, telemetry_gap_s=3.0, disarm_s=40.0),
 }
 
 
@@ -124,6 +132,8 @@ class Autopilot:
     def fail(self, code, detail):
         """Report failure. `code` is one of: timeout, readiness_failed, command_rejected,
         connection_failed, mission_exception. `detail` says which state failed and why."""
+        if code not in FAIL_CODES:
+            raise ValueError(f"Unknown failure code {code!r}. Use one of: {', '.join(FAIL_CODES)}")
         self.log(f"[outcome] failed {code}: {detail}")
         self.client.outcome(False, code, detail)
 

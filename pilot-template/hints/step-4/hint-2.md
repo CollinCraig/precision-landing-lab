@@ -8,6 +8,6 @@ This file is optional. It gives no code.
 - Use the budget `budgets.disarm_s`. It is different for the fake and for SITL.
 - After a landing request, the old armed heartbeats still arrive. Question: How do you not confuse them with a disarm?
 
-Open `hint-3.md` only if you want the field names.
+Open `hint-3.md` only if you want design help. The names are in `API.md`.
 
 Write the number of the highest hint file that you opened in the column "Hint file" of `progress.md`. All hint files are help level 2.

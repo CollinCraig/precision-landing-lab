@@ -101,10 +101,19 @@ class PilotCase(unittest.TestCase):
             "The fake autopilot saw a command that came too early. "
             "Wait for the proof in telemetry before each command."))
 
-    def assert_bounded_failure(self, fault, phase, budget):
+    def assert_bounded_failure(self, fault, phase, budget, also=()):
+        """The pilot must end the wait with a specific failure code and a detail that names the state.
+
+        `phase` is the state that the pilot must enter. `also` lists other states that the detail may name.
+        """
         fake, result, elapsed = self.exercise(fault)
-        self.assertFalse(result["success"], self.say("Do not report success when a state never arrives."))
-        self.assertIn(phase, self.phases(result), self.say(f"Enter the state {phase} before this failure."))
+        seen = self.phases(result)
+        allowed = (phase, *also)
+        self.assertFalse(result["success"], self.say(
+            f"The fault '{fault}' stops {phase}. The pilot reported success. Do not report success when a state never arrives."))
+        self.assertIn(phase, seen, self.say(
+            f"The pilot entered these states: {', '.join(seen) or 'none'}. The test expected the state {phase} "
+            f"before the failure '{fault}'. Call ap.phase(\"{phase}\") when you enter it."))
         self.assert_clean(fake)
         reason = result["failure_reason"]
         self.assertNotEqual(reason["code"], "mission_exception", self.say(
@@ -113,8 +122,12 @@ class PilotCase(unittest.TestCase):
         self.assertNotIn("Runner wall-time limit reached", reason["detail"], self.say(
             "The runner time limit stopped the run. Your own state limit must end the wait first."))
         self.assertIn(reported_code(reason), BOUNDED, self.say(f"Use one of these codes: {', '.join(BOUNDED)}."))
-        self.assertIn(phase, reason["detail"], self.say(f"Put the state name {phase} in the failure detail."))
-        self.assertLess(elapsed, budget, self.say(f"End the wait in {phase} inside its budget."))
+        self.assertTrue(any(name in reason["detail"] for name in allowed), self.say(
+            f"The failure detail was: {reason['detail']!r}. The test expected the name of the failed state: "
+            f"{' or '.join(allowed)}."))
+        self.assertLess(elapsed, budget, self.say(
+            f"The run took {elapsed:.1f} seconds. The test expected the failure in less than {budget} seconds. "
+            f"End the wait in {phase} inside its budget."))
         return fake, result
 
 
@@ -173,7 +186,11 @@ class Step3Tests(PilotCase):
         self.assert_bounded_failure("climb_stuck", "CLIMB", 5)
 
     def test_step3_telemetry_stops_after_takeoff(self):
-        self.assert_bounded_failure("telemetry_lost", "CLIMB", 5)
+        """The fault stops all messages after the takeoff request. No ACK arrives. Both states are valid.
+
+        A pilot that waits for the takeoff ACK fails in TAKEOFF. A pilot that enters CLIMB first fails in CLIMB.
+        """
+        self.assert_bounded_failure("telemetry_lost", "TAKEOFF", 6, also=("CLIMB",))
 
     def test_step3_telemetry_stops_during_hold(self):
         fake, _ = self.assert_bounded_failure("telemetry_lost_hold", "HOLD", 12)

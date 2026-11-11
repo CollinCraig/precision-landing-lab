@@ -1,6 +1,6 @@
 """Learning tool for the owner's pilot repository (D-038). Entry point: scripts/learn.
 
-Commands: init, status, step N, listen, doctor. It never starts SITL and installs nothing.
+Commands: init, status, step N, fake, listen, doctor. It never starts SITL and installs nothing.
 Messages to the owner follow ASD-STE100 Simplified Technical English.
 """
 import argparse
@@ -11,6 +11,7 @@ import socket
 import struct
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 from pathlib import Path
@@ -202,6 +203,34 @@ def step(pilot, number):
     return 1 if failed else 0
 
 
+FAKE_FAULTS = ("none", "no_heartbeat", "not_ready", "mode_stuck", "arm_stuck", "arm_denied", "climb_stuck",
+               "telemetry_lost", "telemetry_lost_hold", "disarm_stuck")
+
+
+def fake(pilot, fault):
+    """Run the pilot's mission once against the fake autopilot. Print the log and the result."""
+    if fault not in FAKE_FAULTS:
+        print(f"Unknown fault {fault!r}. Use one of: {', '.join(FAKE_FAULTS)}.")
+        return 2
+    sys.path[:0] = [str(PLATFORM_ROOT / "tests")]
+    from m1_support import FakeAutopilot, metadata
+    from .pilot_api import pilot_command
+    from .run import run
+    command, env = pilot_command(pilot, "fake")
+    keep = pilot / "local" / "last-run" / "fake"
+    shutil.rmtree(keep, ignore_errors=True)
+    keep.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as root:
+        path, result = run(root, metadata("fake", "m1-fake"), command,
+                           factory=lambda _: FakeAutopilot(None if fault == "none" else fault), timeout=30, env=env)
+        print((path / "mission.stderr").read_text(errors="replace"), end="")
+        shutil.copytree(path, keep)
+    reason = result["failure_reason"]
+    print("Result:", "success" if result["success"] else f"failed {reason['code']}: {reason['detail']}")
+    print(f"The tool saves the run in local/last-run/fake. Fault used: {fault}.")
+    return 0 if result["success"] else 1
+
+
 def status(pilot):
     first_open = None
     for number in range(1, STEP_COUNT + 1):
@@ -286,8 +315,9 @@ def udp_packets(endpoint, seconds):
 def listen(endpoint, seconds, replay, types):
     """Print decoded messages. ACK and STATUSTEXT always print; other types print once each second."""
     source = read_tlog(replay) if replay else udp_packets(endpoint, seconds)
-    last, origin, count = {}, None, 0
+    last, origin, count, received = {}, None, 0, 0
     for stamp, packet in source:
+        received += 1
         try:
             message = mavlite.decode(packet)
         except ValueError:
@@ -302,6 +332,13 @@ def listen(endpoint, seconds, replay, types):
         count += 1
         print(f"[{stamp - origin:7.2f}s] {message.pretty()}")
     print(f"{count} lines printed.")
+    if not received and not replay:
+        print(f"No packets arrived on {endpoint} in {seconds:g} seconds. SITL is probably not running.")
+        print("Next action: start SITL (see SESSION-1.md in your pilot folder). Then run this command again.")
+    elif not received:
+        print("The tlog file has no packets. Next action: check the file name.")
+    elif not count:
+        print("Packets arrived, but none matched. Next action: check --types, or run the command again with no --types.")
     return 0 if count else 1
 
 
@@ -313,6 +350,8 @@ def main(argv=None):
     sub.add_parser("status", help="run all steps, show the next action")
     p = sub.add_parser("step", help="run the tests of one step")
     p.add_argument("number", type=int)
+    p = sub.add_parser("fake", help="run your mission once against the fake autopilot")
+    p.add_argument("--fault", default="none", help="one of: " + ", ".join(FAKE_FAULTS))
     sub.add_parser("doctor", help="check the platform path and the platform pin")
     p = sub.add_parser("listen", help="print decoded messages from SITL or from a tlog file")
     p.add_argument("--endpoint", default="udpin:127.0.0.1:14550")
@@ -332,6 +371,8 @@ def main(argv=None):
         return status(pilot)
     if args.command == "doctor":
         return doctor(pilot)
+    if args.command == "fake":
+        return fake(pilot, args.fault)
     if not 0 < args.seconds <= 300:
         parser.error("--seconds must be in (0, 300]")
     try:

@@ -294,6 +294,41 @@ class LearnCliTests(unittest.TestCase):
             self.assertEqual(learn("listen", "--replay", str(log), "--types", "SYS_STATUS")[0], 1)
             self.assertEqual(learn("listen", "--endpoint", "udpin:0.0.0.0:1")[0], 2)
 
+    def test_listen_without_sitl_says_so_and_gives_the_next_action(self):
+        with tempfile.TemporaryDirectory() as root:
+            code, out = learn("--pilot", root, "listen", "--endpoint", "udpin:127.0.0.1:54321", "--seconds", "0.6")
+        self.assertEqual(code, 1)
+        self.assertIn("0 lines printed.", out)
+        self.assertIn("SITL is probably not running", out)
+        self.assertIn("Next action: start SITL", out)
+        self.assertIn("SESSION-1.md", out)
+
+    def test_listen_says_when_packets_arrive_but_none_match(self):
+        with tempfile.TemporaryDirectory() as root:
+            log = Path(root) / "x.tlog"
+            log.write_bytes((1_000_000).to_bytes(8, "big") + bytes.fromhex(REAL["heartbeat"]))
+            code, out = learn("listen", "--replay", str(log), "--types", "SYS_STATUS")
+        self.assertEqual(code, 1)
+        self.assertIn("none matched", out)
+        self.assertNotIn("SITL is probably not running", out)
+
+    def test_fake_command_runs_the_mission_against_one_fault(self):
+        probe = ('PLATFORM_INTERFACE = 1\n'
+                 'def run(ap, budgets):\n'
+                 '    ap.phase("CONNECT")\n    ap.receive(timeout=1)\n'
+                 '    ap.fail("timeout", "CONNECT: probe")\n')
+        with tempfile.TemporaryDirectory() as root:
+            (Path(root) / "mission.py").write_text(probe)
+            code, out = learn("--pilot", root, "fake", "--fault", "no_heartbeat")
+            self.assertEqual(code, 1)
+            self.assertIn("[outcome] failed timeout", out)
+            # no_heartbeat: no telemetry arrives, so the runner wraps the pilot outcome (lab/link.py)
+            self.assertIn("Result: failed runner_error: Before telemetry: timeout: CONNECT: probe", out)
+            self.assertTrue((Path(root) / "local" / "last-run" / "fake" / "mission.stderr").is_file())
+            code, out = learn("--pilot", root, "fake", "--fault", "nonsense")
+            self.assertEqual(code, 2)
+            self.assertIn("arm_denied", out)  # the message lists the valid fault names
+
 
 if __name__ == "__main__":
     unittest.main()
