@@ -12,7 +12,7 @@ import time
 import unittest
 
 from lab.link import Connection, Evidence, RunFailure, packet_info
-from lab.run import run
+from lab.run import run, _json
 
 
 def packet(msgid, *, v2=False, boot=10, system=1, payload=None):
@@ -141,6 +141,18 @@ class RunnerTests(unittest.TestCase):
         _, result = self.execute(child, timeout=0.12)
         self.assertLess(time.monotonic() - start, 1.5)
         self.assertIn("timeout", result["failure_reason"]["detail"])
+
+    def test_protocol_requires_utf8(self):
+        with self.assertRaises(UnicodeError):
+            _json('{"op":"event"}'.encode("utf-16"))
+
+    def test_receive_preserves_interrupt_failure(self):
+        class InterruptedFake(Fake):
+            def recv_match(self, blocking=False):
+                raise RunFailure("interrupted", "signal during receive")
+        _, result = run(self.root, metadata(), [sys.executable, "-u", "-c", RECEIVE_TWO],
+                        factory=lambda _: InterruptedFake(), timeout=2)
+        self.assertEqual(result["failure_reason"]["code"], "interrupted")
 
     def test_guard_refusal_before_connection(self):
         called = []
@@ -284,7 +296,7 @@ assert json.loads(sys.stdin.readline()) == {"recorded":True}
         self.assertEqual(completed.returncode, 1, completed.stderr)
         manifest = json.loads((self.root / "cli/manifest.json").read_text())
         self.assertRegex(manifest["git"]["commit"], r"^[a-f0-9]{40}$")
-        self.assertEqual(json.loads((self.root / "cli/result.json").read_text())["failure_reason"]["code"], "connection_failed")
+        self.assertEqual(json.loads((self.root / "cli/result.json").read_text())["failure_reason"]["code"], "ac_unavailable")
 
     def test_plv_synthetic_end_to_end(self):
         plv = os.environ.get("PLV") or shutil.which("plv")

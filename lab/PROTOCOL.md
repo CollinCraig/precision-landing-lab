@@ -73,3 +73,23 @@ group TERM then KILL and reaps the leader, including after leader exit. Children
 must not daemonize or escape their group. This is cleanup isolation, not a
 security sandbox. SIGINT/SIGTERM finalize interrupted evidence from the main
 thread; other-thread embedders provide cancellation through the guard callback.
+
+## Review clarifications
+
+Until the wall-power guard is installed, the CLI and default live-link library
+path refuse before opening the endpoint (`ac_unavailable`). Injected fake
+transports are for tests. Version/image strings are operator assertions, not
+independent verification of a running autopilot or container.
+
+The child is trusted as the author of its declared events and outcome. Source
+labels and failure codes supplied by the child are declarations, not verified
+provenance. Flight acceptance must inspect evidence separately. Incoming child
+protocol is UTF-8 only. Selected malformed telemetry remains a fail-closed
+connection error; BAD_DATA recovery is not implemented in M1.
+
+Telemetry evidence is capped at 64 MiB. Child stderr is checked on each runner
+checkpoint and aborts over 1 MiB; this is a polled limit and can overshoot during
+a burst. It is not a disk quota or a sandbox for hostile child code.
+
+Guard callbacks must not reap the child leader. Use `stop_child` for cleanup.
+The runner observes exit with `waitid(WNOWAIT)` until it sends group signals.

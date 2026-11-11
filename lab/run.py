@@ -26,7 +26,7 @@ def _json(line):
                 raise ValueError("duplicate JSON key")
             result[key] = value
         return result
-    return json.loads(line, object_pairs_hook=pairs,
+    return json.loads(line.decode("utf-8") if isinstance(line, bytes) else line, object_pairs_hook=pairs,
                       parse_constant=lambda x: (_ for _ in ()).throw(ValueError(x)))
 
 
@@ -37,19 +37,30 @@ def stop_child(process, grace=0.5):
     Children must not daemonize/escape their process group; this is isolation
     for cleanup, not an OS security sandbox.
     """
+    if process.returncode is not None:
+        return  # An external caller reaped it; its group identity is no longer safe.
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
         pass
-    try:
-        process.wait(timeout=grace)
-    except subprocess.TimeoutExpired:
-        pass
+    # Keep the leader unreaped until both group signals have been sent so
+    # its PID cannot be reused as another process group's identity.
+    deadline = time.monotonic() + grace
+    while time.monotonic() < deadline:
+        time.sleep(min(0.01, max(0, deadline - time.monotonic())))
     try:
         os.killpg(process.pid, signal.SIGKILL)
     except ProcessLookupError:
         pass
     process.wait()
+
+
+def child_status(process):
+    """Observe exit without reaping the process-group leader (Linux/POSIX)."""
+    info = os.waitid(os.P_PID, process.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT)
+    if info is None:
+        return None
+    return info.si_status if info.si_code == os.CLD_EXITED else -info.si_status
 
 
 def run(root, metadata, command, *, endpoint="udpin:127.0.0.1:14550",
@@ -68,14 +79,25 @@ def run(root, metadata, command, *, endpoint="udpin:127.0.0.1:14550",
     failure = None
     deadline = time.monotonic() + timeout
     previous_handlers = {}
+    launching = False
+    pending_signal = None
 
     def checkpoint(phase="poll"):
         if guard:
             guard(phase, process)
+        elif factory is open_link:
+            raise RunFailure("ac_unavailable", "Live connections disabled until the wall-power guard is installed")
+        stderr_path = evidence.path / "mission.stderr"
+        if stderr_path.exists() and stderr_path.stat().st_size > 1048576:
+            raise RunFailure("mission_exception", "Mission stderr exceeded 1 MiB (polled limit)")
         if time.monotonic() >= deadline:
             raise RunFailure("timeout", "Runner wall-time limit reached")
 
     def interrupted(signum, frame):
+        nonlocal pending_signal
+        if launching:
+            pending_signal = signum
+            return
         raise RunFailure("interrupted", f"Received signal {signum}")
 
     def reply(value):
@@ -111,8 +133,16 @@ def run(root, metadata, command, *, endpoint="udpin:127.0.0.1:14550",
         checkpoint("before_launch")
         with (evidence.path / "mission.stderr").open("xb") as stderr:
             try:
-                process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                           stderr=stderr, start_new_session=True, bufsize=0)
+                launching = True
+                try:
+                    process = subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                               stderr=stderr, start_new_session=True, bufsize=0)
+                finally:
+                    launching = False
+                if pending_signal is not None:
+                    raise RunFailure("interrupted", f"Received signal {pending_signal} during launch")
+            except RunFailure:
+                raise
             except Exception as exc:
                 raise RunFailure("mission_exception", f"Launching mission: {type(exc).__name__}: {exc}") from exc
             os.set_blocking(process.stdin.fileno(), False)
@@ -146,6 +176,8 @@ def run(root, metadata, command, *, endpoint="udpin:127.0.0.1:14550",
                             wait = request["timeout"]
                             if type(wait) not in (int, float) or not math.isfinite(wait):
                                 raise ValueError("timeout must be finite numeric seconds")
+                            if request["type"] not in (None, "HEARTBEAT", "GLOBAL_POSITION_INT") or not 0 <= wait <= 5:
+                                raise ValueError("invalid receive type or timeout")
                             received = link.receive(request["type"], wait)
                             reply({"packet": None} if received is None else {
                                 "type": received["type"], "packet": base64.b64encode(received["packet"]).decode()})
@@ -155,6 +187,8 @@ def run(root, metadata, command, *, endpoint="udpin:127.0.0.1:14550",
                                 raise ValueError("send packet must contain 1..280 bytes")
                             try:
                                 transport.write(packet)
+                            except RunFailure:
+                                raise
                             except Exception as exc:
                                 raise RunFailure("connection_failed", f"Sending packet: {type(exc).__name__}: {exc}") from exc
                             reply({"sent": len(packet)})
@@ -181,11 +215,12 @@ def run(root, metadata, command, *, endpoint="udpin:127.0.0.1:14550",
                         raise RunFailure("mission_exception", f"Child protocol: {type(exc).__name__}: {exc}") from exc
                 if len(buffer) > 4096:
                     raise RunFailure("mission_exception", "Protocol line exceeds 4096 bytes")
-                if eof and process.poll() is not None:
+                status = child_status(process) if eof else None
+                if eof and status is not None:
                     if buffer:
                         raise RunFailure("mission_exception", "Unterminated child protocol line")
-                    if process.returncode != 0:
-                        raise RunFailure("mission_exception", f"Mission process exited {process.returncode}")
+                    if status != 0:
+                        raise RunFailure("mission_exception", f"Mission process exited {status}")
                     if outcome is None:
                         raise RunFailure("mission_exception", "Mission exited without outcome")
                     failure = outcome[1]

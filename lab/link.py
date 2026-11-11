@@ -9,6 +9,7 @@ import copy
 import os
 import re
 import struct
+import signal
 import time
 from pathlib import Path
 
@@ -147,9 +148,15 @@ class Evidence:
                 raise RunFailure("connection_failed", "Autopilot boot clock rolled back")
             self.boot = boot
         stamp = self.elapsed()
-        self.tlog.write(struct.pack(">Q", self.start + stamp) + bytes(packet))
-        self.last = stamp
-        self.count += 1
+        if self.tlog.tell() + 8 + len(packet) > 64 * 1024 * 1024:
+            raise RunFailure("runner_error", "Telemetry evidence exceeded 64 MiB")
+        mask = signal.pthread_sigmask(signal.SIG_BLOCK, {signal.SIGINT, signal.SIGTERM})
+        try:
+            self.tlog.write(struct.pack(">Q", self.start + stamp) + bytes(packet))
+            self.last = stamp
+            self.count += 1
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, mask)
         self.seen.add(msgid)
         return msgid
 
@@ -212,6 +219,8 @@ class Connection:
             try:
                 msg = self.transport.recv_match(blocking=False)
                 packet = bytes(msg.get_msgbuf()) if msg is not None else None
+            except RunFailure:
+                raise
             except Exception as exc:
                 raise RunFailure("connection_failed", f"Receiving telemetry: {type(exc).__name__}: {exc}") from exc
             if packet is not None:
