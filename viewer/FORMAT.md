@@ -95,6 +95,24 @@ Rules (enforced by `parseViewer` in `app.js`, tested in `tests/app.test.js`):
 - Duration is the larger of `result.duration_us` and the last sample time.
   Events from `result.json` appear as ticks on the timeline.
 
+## 3D scene options
+
+The 3D view draws a procedural city block around the rooftop vertiport. The
+layout is in `scene/city.json` (fields: `scene/README.md`). The scene does not
+change the data contract above: the deck top is still altitude 0 and the pad
+is still at `pad`.
+
+URL parameters for the scene (all optional):
+
+| Parameter | Values | Default |
+|---|---|---|
+| `cam` | `chase`, `orbit`, `top`, `city` | `chase` |
+| `tod` | `day`, `golden`, `dusk` | `day` |
+| `q` | `low`, `high` | `low` on touch devices, else `high`; the last choice is remembered |
+| `wind` | `<from_deg>,<m/s>`, for example `270,5` | `vertiport.wind` in `city.json` |
+
+Keys: `C` cycles the camera, `L` cycles the time of day, `Q` toggles quality.
+
 ## Live telemetry (M2+)
 
 The UI renders from a `TelemetryStore` (columnar, same columns as above).

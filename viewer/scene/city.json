@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "name": "Rooftop vertiport city block",
+  "units": "m",
+  "frame": {
+    "name": "ENU",
+    "x": "east",
+    "y": "north",
+    "z": "up",
+    "origin": "pad centre, at street level (z = 0)"
+  },
+  "streets": {
+    "pitch": [80, 80],
+    "offset": [-30, -20],
+    "road_width": 14,
+    "lanes": 4,
+    "sidewalk_width": 3,
+    "curb_height": 0.15,
+    "extent": 3
+  },
+  "buildings": [
+    {"id": "vertiport", "footprint": [-12, -10, 10, 8], "height": 28.0, "facade": "concrete", "role": "vertiport"},
+
+    {"id": "office-east", "footprint": [12, -10, 40, 14], "height": 46, "facade": "glass", "setbacks": [{"at": 34, "inset": 3}]},
+    {"id": "lowrise-west", "footprint": [-20, -10, -14, 20], "height": 14, "facade": "brick"},
+    {"id": "midrise-north", "footprint": [-20, 22, 8, 50], "height": 22, "facade": "office"},
+    {"id": "tower-northeast", "footprint": [14, 18, 40, 50], "height": 72, "facade": "glass", "setbacks": [{"at": 50, "inset": 2.5}, {"at": 64, "inset": 2}]},
+
+    {"id": "south-office", "footprint": [-20, -58, 6, -30], "height": 24, "facade": "office"},
+    {"id": "south-brick", "footprint": [9, -52, 40, -30], "height": 18, "facade": "brick"},
+    {"id": "south-back", "footprint": [-20, -90, 40, -62], "height": 34, "facade": "concrete"},
+
+    {"id": "west-tower", "footprint": [-70, -10, -40, 24], "height": 55, "facade": "glass", "setbacks": [{"at": 40, "inset": 3}]},
+    {"id": "west-brick", "footprint": [-70, 27, -40, 50], "height": 26, "facade": "brick"},
+    {"id": "west-office", "footprint": [-100, -10, -73, 50], "height": 31, "facade": "office"},
+
+    {"id": "east-office", "footprint": [60, -10, 86, 20], "height": 32, "facade": "office"},
+    {"id": "east-tower", "footprint": [89, -10, 120, 50], "height": 80, "facade": "glass", "setbacks": [{"at": 56, "inset": 3}, {"at": 72, "inset": 3}]},
+    {"id": "east-lowrise", "footprint": [60, 23, 86, 50], "height": 16, "facade": "concrete"},
+
+    {"id": "north-office", "footprint": [-20, 70, 18, 100], "height": 36, "facade": "office"},
+    {"id": "north-brick", "footprint": [22, 70, 40, 110], "height": 12, "facade": "brick"}
+  ],
+  "vertiport": {
+    "building": "vertiport",
+    "pad": {"x": 0, "y": 0, "z": 28.9, "yaw_deg": 0},
+    "deck_height": 0.9,
+    "tlof": 1.0,
+    "fato": 2.0,
+    "safety_area": 3.0,
+    "net_width": 0.5,
+    "parapet": {"height": 1.0, "thickness": 0.3},
+    "stair_tower": {"footprint": [4, -8, 9, -3.5], "height": 3.2, "floodlights": 2},
+    "hvac": [
+      {"footprint": [-10.5, 3.5, -7.5, 6.5], "height": 1.6},
+      {"footprint": [-10.5, -8.5, -8.0, -5.5], "height": 1.4}
+    ],
+    "windsock": {"x": 8.5, "y": 6.5, "mast_height": 1.2, "length": 0.4},
+    "wind": {"from_deg": 360, "speed_mps": 4},
+    "approach_from_deg": 180
+  },
+  "plaza": {"footprint": [-12, 10, 10, 20], "trees": 6},
+  "street_trees": {"spacing": 10, "extent": 1},
+  "street_lights": {"spacing": 28, "extent": 1, "height": 7},
+  "context": {"seed": 7, "extent": 3, "min_height": 10, "max_height": 48, "tower_chance": 0.12, "tower_height": 70}
+}

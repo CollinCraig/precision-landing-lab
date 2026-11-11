@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Replay Viewer</title>
-<meta name="description" content="Replay a saved precision-landing simulation run: 3D rooftop pad view, timeline, altitude and vertical-speed charts. Simulation only.">
+<meta name="description" content="Replay a saved precision-landing simulation run: 3D city and rooftop vertiport view, timeline, altitude and vertical-speed charts. Simulation only.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -52,13 +52,30 @@
           <div class="rd"><span class="k">VS</span><b id="hudVs">–</b><span class="u">m/s</span></div>
         </div>
       </div>
-      <div class="scene-tools chrome">
-        <button class="btn sm" id="followBtn" type="button" aria-pressed="false">Follow</button>
-        <button class="btn sm" id="resetBtn" type="button">Reset view</button>
-      </div>
       <div class="rec-progress"><div id="recBand" class="band"></div><i class="rec-head"></i></div>
       <button id="recExit" class="rec-exit" type="button" aria-label="Exit recording mode" title="Exit recording mode (Esc)"></button>
     </section>
+
+    <div class="viewbar chrome" aria-label="View options">
+      <div id="camSeg" class="speeds" role="group" aria-label="Camera">
+        <button type="button" data-cam="chase" aria-pressed="false" title="Chase camera (C cycles)">Chase</button>
+        <button type="button" data-cam="orbit" aria-pressed="false" title="Free orbit camera">Orbit</button>
+        <button type="button" data-cam="top" aria-pressed="false" title="Top-down camera, north up">Top</button>
+        <button type="button" data-cam="city" aria-pressed="false" title="Wide city establishing shot">City</button>
+      </div>
+      <div id="todSeg" class="speeds" role="group" aria-label="Time of day">
+        <button type="button" data-tod="day" aria-pressed="false" title="Time of day (L cycles)">Day</button>
+        <button type="button" data-tod="golden" aria-pressed="false">Golden</button>
+        <button type="button" data-tod="dusk" aria-pressed="false">Dusk</button>
+      </div>
+      <div id="qSeg" class="speeds" role="group" aria-label="Render quality">
+        <button type="button" data-q="low" aria-pressed="false" title="Render quality (Q toggles). Low: for tablets">Low</button>
+        <button type="button" data-q="high" aria-pressed="false">High</button>
+      </div>
+      <span class="vb-sp"></span>
+      <button class="btn sm2" id="followBtn" type="button" aria-pressed="false" hidden>Follow</button>
+      <button class="btn sm2" id="resetBtn" type="button">Reset view</button>
+    </div>
 
     <section class="panel chrome" id="panel" aria-label="Timeline and charts">
       <div class="transport">
@@ -92,11 +109,34 @@
   </main>
 
   <footer class="chrome">
-    Simulation only; no real vehicles or airspace. Keys: <kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> step · <kbd>1</kbd>–<kbd>4</kbd> speed · <kbd>R</kbd> recording mode · <kbd>T</kbd> theme.
-    URL: <code>?run=&lt;dir&gt;&amp;t=&lt;s&gt;&amp;autoplay=1&amp;speed=2&amp;rec=1&amp;theme=dark</code>
+    Simulation only; no real vehicles or airspace. The city is a procedural model, not a real place. Keys: <kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> step · <kbd>1</kbd>–<kbd>4</kbd> speed · <kbd>C</kbd> camera · <kbd>L</kbd> time of day · <kbd>Q</kbd> quality · <kbd>R</kbd> recording mode · <kbd>T</kbd> theme.
+    URL: <code>?run=&lt;dir&gt;&amp;t=&lt;s&gt;&amp;autoplay=1&amp;speed=2&amp;rec=1&amp;theme=dark&amp;cam=chase|orbit|top|city&amp;tod=day|golden|dusk&amp;q=low|high&amp;wind=&lt;from_deg&gt;,&lt;m/s&gt;</code>
   </footer>
 </div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js"></script>
+<!-- three.js r170 and its addons, pinned to exact versions. If they fail to load, the viewer still runs without the 3D view. -->
+<script type="importmap">
+{"imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+}}
+</script>
+<script type="module">
+try {
+  const [T, sky, ec, rp, ub, op, bgu] = await Promise.all([
+    import('three'),
+    import('three/addons/objects/Sky.js'),
+    import('three/addons/postprocessing/EffectComposer.js'),
+    import('three/addons/postprocessing/RenderPass.js'),
+    import('three/addons/postprocessing/UnrealBloomPass.js'),
+    import('three/addons/postprocessing/OutputPass.js'),
+    import('three/addons/utils/BufferGeometryUtils.js'),
+  ]);
+  window.THREE = T;
+  window.THREEX = { Sky: sky.Sky, EffectComposer: ec.EffectComposer, RenderPass: rp.RenderPass, UnrealBloomPass: ub.UnrealBloomPass, OutputPass: op.OutputPass, mergeGeometries: bgu.mergeGeometries };
+} catch (e) { console.warn('three.js unavailable:', e); }
+for (const src of ['world-core.js', 'world.js', 'app.js']) {
+  await new Promise((done) => { const s = document.createElement('script'); s.src = src; s.onload = s.onerror = done; document.body.appendChild(s); });
+}
+</script>
 </body>
 </html>
