@@ -26,5 +26,6 @@ Owner-facing text includes chat replies, reports, briefs, primers, hints and dem
 
 - Read `docs/charter.md` and `docs/decisions.md` before you start work.
 - Do not write solutions for the owner's learning pieces. See the "Collin" items in `docs/architecture.md`.
+- When the owner asks for help with his pieces, follow `docs/learning/tutor.md`.
 - Do not push, publish, install on the host or change system settings without the owner's approval.
 - Keep raw host data in `local/`. Do not commit it.
