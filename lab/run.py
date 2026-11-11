@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 
 from .link import Connection, Evidence, RunFailure, open_link
+from .power import WallPowerGuard
 
 
 def _json(line):
@@ -74,6 +75,8 @@ def run(root, metadata, command, *, endpoint="udpin:127.0.0.1:14550",
     """
     if not math.isfinite(timeout) or not 0 < timeout <= 86400:
         raise ValueError("timeout must be finite, in (0,86400]")
+    if guard is None and factory is open_link:
+        guard = WallPowerGuard()
     evidence = Evidence(root, metadata)
     transport = process = selector = None
     failure = None
@@ -83,10 +86,8 @@ def run(root, metadata, command, *, endpoint="udpin:127.0.0.1:14550",
     pending_signal = None
 
     def checkpoint(phase="poll"):
-        if guard:
+        if guard is not None:
             guard(phase, process)
-        elif factory is open_link:
-            raise RunFailure("ac_unavailable", "Live connections disabled until the wall-power guard is installed")
         stderr_path = evidence.path / "mission.stderr"
         if stderr_path.exists() and stderr_path.stat().st_size > 1048576:
             raise RunFailure("mission_exception", "Mission stderr exceeded 1 MiB (polled limit)")
@@ -289,7 +290,8 @@ def main(argv=None):
                     input_sources=args.input_source, versions={"ardupilot": args.ardupilot_version, "container": args.container},
                     git=provenance(), host=socket.gethostname())
     try:
-        path, result = run(args.runs, metadata, command, endpoint=args.endpoint, timeout=args.timeout)
+        path, result = run(args.runs, metadata, command, endpoint=args.endpoint, timeout=args.timeout,
+                           guard=WallPowerGuard())
     except (ValueError, OSError) as exc:
         parser.exit(2, f"Cannot reserve/finalize run: {exc}\n")
     print(f"{path}: {'success' if result['success'] else result['failure_reason']['code']}")

@@ -62,12 +62,27 @@ factory **must return promptly**; injected Python code is not forcibly timed
 out. The lazy pymavlink default supports only explicit 127.0.0.1 UDP endpoints;
 TCP retry behavior is deliberately excluded. No dependency is installed.
 
-For the next wall-power guard task, supply `guard(phase, process)`; phases are
+The default live path and CLI use `WallPowerGuard` from `lab.power`.
+The guard reads `/sys/class/power_supply` at each checkpoint. Only supplies
+with type `Mains` qualify. At least one supply must report `online=1`.
+Missing, unreadable, malformed or oversized attributes cause unknown status.
+Battery status does not prove wall power. Other supply types do not qualify.
+The source reads at most 128 entries and 64 bytes per attribute.
+Reads use local sysfs files. No external commands or system changes occur.
+
+Offline or unknown status prevents connection and child launch. During a run,
+either status stops the child process group. The runner writes the failure
+reason. An AC failure remains in result detail before telemetry, even when
+the accepted format requires `runner_error`. The format remains unchanged.
+The guard keeps its first failure. AC recovery does not resume the run.
+Start a new run after AC checks pass.
+
+For an injected guard, supply `guard(phase, process)`; phases are
 `before_connect`, `before_launch`, `poll`. Raise `RunFailure("ac_unavailable",
 detail)` or `RunFailure("ac_lost", detail)` as appropriate. It is called every
 receive iteration and approximately every 20 ms while awaiting child output.
 The callback must itself be bounded. The run deadline is checked at the same
-checkpoints, including during receives. No power check is implemented here.
+checkpoints, including during receives.
 Each child starts a new POSIX session; `stop_child(process, grace=0.5)` sends
 group TERM then KILL and reaps the leader, including after leader exit. Children
 must not daemonize or escape their group. This is cleanup isolation, not a
@@ -76,9 +91,15 @@ thread; other-thread embedders provide cancellation through the guard callback.
 
 ## Review clarifications
 
-Until the wall-power guard is installed, the CLI and default live-link library
-path refuse before opening the endpoint (`ac_unavailable`). Injected fake
-transports are for tests. Version/image strings are operator assertions, not
+`read_ac(root=...)` returns `ACState.ONLINE`, `OFFLINE` or `UNKNOWN`.
+`WallPowerGuard(source=...)` accepts a prompt, zero-argument source for tests.
+Source exceptions and invalid return values cause unknown status.
+The guard never signals, polls or reaps the child. The runner owns cleanup.
+Create a new guard for each run. Injected fake transports skip the default
+guard, so tests do not depend on host power. Supply a guard to test AC loss.
+The CLI always supplies a guard. It has no AC bypass flag.
+
+Version/image strings are operator assertions, not
 independent verification of a running autopilot or container.
 
 The child is trusted as the author of its declared events and outcome. Source
