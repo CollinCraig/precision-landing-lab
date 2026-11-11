@@ -10,7 +10,7 @@ Each third-party action is pinned by full commit SHA.
 |---|---|
 | `python` | Builds `plv`. Runs `tests/test_runner.py`, `tests/test_sitl_up.py`, `tests/test_export_tlog.py` and the M1 platform tests (`test_m1_infrastructure`, `test_pilot_api`, `test_learn_cli`, `test_step_checks`, `test_learner_text`) with `unittest` on Python 3.12. Pilot step tests skip without `M1_PILOT`. The tests use the `plv` binary for the end-to-end case. |
 | `rust` | In `validator/`, with Rust 1.75.0 (the minimum supported version): `cargo fmt --check`, `cargo clippy` and `cargo test`. |
-| `viewer` | Runs `node --test viewer/tests/` on Node 24.11.0 (LTS). |
+| `viewer` | Runs `node --test viewer/tests/*.test.js` on Node 24.11.0 (LTS). |
 | `hygiene` | Runs `.github/scripts/hygiene.sh`. It fails on the items in the next list. |
 
 The hygiene job fails on:
@@ -41,7 +41,7 @@ Run all commands from the repository root.
    - Run clippy: `cargo clippy --locked --all-targets`
    - Run the tests: `cargo test --locked`
    - Use Rust 1.75.0 for the same result as CI.
-3. Run the viewer tests: `node --test viewer/tests/`
+3. Run the viewer tests: `node --test viewer/tests/*.test.js`
 4. Run the hygiene checks: `bash .github/scripts/hygiene.sh`
    - The script reads the list of tracked files. Add new files with `git add` first.
 

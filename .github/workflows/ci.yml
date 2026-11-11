@@ -75,7 +75,7 @@ jobs:
         with:
           node-version: "24.11.0"
       - name: Run node tests
-        run: node --test viewer/tests/
+        run: node --test viewer/tests/*.test.js
 
   hygiene:
     name: Repository hygiene
