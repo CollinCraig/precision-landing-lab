@@ -1,0 +1,9 @@
+#!/bin/sh
+# Run the platform learning tool against this folder. Example: ./learn step 1
+here=$(cd "$(dirname "$0")" && pwd)
+platform=${LANDING_LAB_PLATFORM:-$(cat "$here/.platform-path" 2>/dev/null)}
+if [ -z "$platform" ] || [ ! -x "$platform/scripts/learn" ]; then
+    echo "Cannot find the platform. Set LANDING_LAB_PLATFORM to the platform folder." >&2
+    exit 2
+fi
+exec "$platform/scripts/learn" --pilot "$here" "$@"

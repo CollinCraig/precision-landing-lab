@@ -1,6 +1,8 @@
 # M1 runner API
 
 `python -m lab.run --help` lists required provenance and child command flags.
+`--pilot <folder>` runs the owner's `mission.py` from an external folder (D-038); see
+`docs/pilot-interface.md`. Use `--pilot` or a command after `--`, not both.
 The runner never starts SITL. `--ardupilot-version` and `--container` must
 describe the actual connected build/image, not an intended version. The CLI
 inspects Git commit/dirty state and hostname. Declare every mission input with
@@ -29,11 +31,16 @@ per line. No shell is involved. The parent sends one initial object:
 The child issues one request at a time and reads its response before issuing
 another. No request IDs or concurrent requests are supported. Exact keys:
 
-* `{"op":"receive","type":null,"timeout":1}`: type is null, HEARTBEAT, or
-  GLOBAL_POSITION_INT; timeout is finite seconds in [0,5]. Reply is
+* `{"op":"receive","type":null,"timeout":1}`: type is null, HEARTBEAT,
+  GLOBAL_POSITION_INT, SYS_STATUS, GPS_RAW_INT, EKF_STATUS_REPORT, COMMAND_ACK or
+  STATUSTEXT; timeout is finite seconds in [0,5]. Reply is
   `{"type":"HEARTBEAT","packet":"<base64 wire packet>"}`, or `{"packet":null}`
   on timeout. Each selected incoming packet is recorded before delivery;
   packets skipped while waiting for a selected type are also recorded.
+  HEARTBEAT and GLOBAL_POSITION_INT go to `flight.tlog` (run format v1).
+  The other types go to the sidecar `aux.tlog` (same record layout, 8 MiB limit,
+  malformed packets ignored). The validator does not read `aux.tlog`.
+  The pilot interface (`lab/pilot_api.py`) always asks with type null and decodes the packets.
 * `{"op":"send","packet":"<base64 bytes>"}`: writes 1..280 bytes to the
   connected transport. Reply `{"sent":N}`. There is no command selection,
   encoding, retry, mode transition, or mission policy in the runner. An ack
@@ -44,6 +51,9 @@ another. No request IDs or concurrent requests are supported. Exact keys:
   no reply. Failure uses false and the accepted `{code,detail}` reason object.
   Then close stdout and exit zero. A nonzero exit, extra protocol content,
   missing outcome, or failure to exit before timeout overrides claimed success.
+
+The child launcher (`lab/mission_child.py`) keeps this protocol on a private copy of
+stdout and points `sys.stdout` to stderr, so a stray `print()` cannot break the protocol.
 
 Telemetry is pulled by receive requests, not a background thread. This is a
 filtered receive trace, not proof of continuous coverage. There is no implicit

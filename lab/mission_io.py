@@ -4,6 +4,8 @@ import json
 import math
 import sys
 
+from lab.link import RECEIVE_TYPES
+
 
 class MissionClient:
     """Use one request at a time. Keep stdout for protocol messages only."""
@@ -36,7 +38,7 @@ class MissionClient:
 
     def receive(self, message_type=None, timeout=1.0):
         """Return wire bytes or None. Use a timeout from zero to five seconds."""
-        if message_type not in (None, "HEARTBEAT", "GLOBAL_POSITION_INT"):
+        if message_type not in (None,) + RECEIVE_TYPES:
             raise ValueError("Unsupported receive type")
         if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or not 0 <= timeout <= 5:
             raise ValueError("Invalid receive timeout")
@@ -44,7 +46,7 @@ class MissionClient:
         response = self._read()
         if response == {"packet": None}:
             return None
-        if set(response) != {"type", "packet"} or response["type"] not in ("HEARTBEAT", "GLOBAL_POSITION_INT"):
+        if set(response) != {"type", "packet"} or response["type"] not in RECEIVE_TYPES:
             raise ValueError("Invalid receive response")
         if message_type is not None and response["type"] != message_type:
             raise ValueError("Unexpected receive type")

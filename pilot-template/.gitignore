@@ -1,0 +1,5 @@
+# Local state. Never commit it.
+local/
+__pycache__/
+*.tlog
+.platform-path

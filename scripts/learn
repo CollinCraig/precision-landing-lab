@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+"""Learning tool for the pilot repository. Run `scripts/learn --help`. See docs/pilot-interface.md."""
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from lab.learn_cli import main  # noqa: E402
+
+raise SystemExit(main())

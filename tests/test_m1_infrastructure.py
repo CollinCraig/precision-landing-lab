@@ -2,7 +2,6 @@
 import base64
 import io
 import json
-import os
 from pathlib import Path
 import struct
 import sys
@@ -10,6 +9,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # tests import m1_support by name
 from lab.link import packet_info
 from lab.mission_io import MissionClient
 from lab.mission_child import main as child_main
@@ -82,7 +82,7 @@ class EquipmentTests(unittest.TestCase):
         position = packet_info(fake.recv_match().get_msgbuf())
         self.assertEqual((heartbeat[0], position[0]), (0, 33))
         self.assertEqual(struct.unpack("<i", position[1][16:20])[0], 0)
-        self.assertTrue(fake.ready_observed)
+        self.assertFalse(fake.ready_observed, "STANDBY and a heartbeat do not mean ready")
         fake.close()
         self.assertIsNone(fake.recv_match())
 
@@ -104,7 +104,10 @@ class EquipmentTests(unittest.TestCase):
         fake.land_at = 5.2
         fake.armed = True
         now[0] = 5.5
-        fake.recv_match()
+        while True:
+            fake.recv_match()
+            if not fake.pending:
+                break
         self.assertTrue(fake.disarm_observed)
         for fault in ("no_heartbeat", "telemetry_lost"):
             broken = FakeAutopilot(fault)
@@ -136,22 +139,22 @@ client.outcome(True)
 
     def test_launcher_reports_missing_outcome(self):
         client, writer = ClientTests().client()
-        with patch("lab.mission_child.MissionClient", return_value=client), patch("lab.mission.run"):
-            child_main()
+        with patch("lab.mission_child.MissionClient", return_value=client), \
+                patch("lab.mission_child.pilot_api.load_pilot", return_value=lambda ap, budgets: None), \
+                patch("sys.stderr", io.StringIO()):
+            child_main(["--pilot", "unused", "--profile", "fake"])
         outcome = json.loads(writer.getvalue())
         self.assertFalse(outcome["success"])
         self.assertEqual(outcome["failure_reason"]["code"], "mission_exception")
 
-    def test_launcher_rejects_invalid_phase_budget(self):
-        for value in ("0", "-1", "nan", "inf", "invalid"):
-            client, writer = ClientTests().client()
-            with patch("lab.mission_child.MissionClient", return_value=client), \
-                    patch("lab.mission.run") as exercise, \
-                    patch.dict(os.environ, {"M1_WAIT_TIMEOUT_S": value}), \
-                    patch("sys.stderr", io.StringIO()):
-                child_main()
-            exercise.assert_not_called()
-            self.assertEqual(json.loads(writer.getvalue())["failure_reason"]["code"], "mission_exception")
+    def test_launcher_rejects_invalid_profile(self):
+        client, writer = ClientTests().client()
+        with patch("lab.mission_child.MissionClient", return_value=client), \
+                patch("lab.mission_child.pilot_api.load_pilot") as load, \
+                patch("sys.stderr", io.StringIO()):
+            child_main(["--pilot", "unused", "--profile", "invalid"])
+        load.assert_not_called()
+        self.assertEqual(json.loads(writer.getvalue())["failure_reason"]["code"], "mission_exception")
 
 
 if __name__ == "__main__":

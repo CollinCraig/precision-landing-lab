@@ -2,28 +2,29 @@
 import json
 import os
 from pathlib import Path
-import sys
 import struct
+import sys
 import unittest
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))  # tests import m1_support by name
 from lab.run import main
 from m1_support import read_selected_tlog
-from test_m1_learner import PHASES
+from test_pilot_steps import PHASES
 
 
 @unittest.skipUnless(os.environ.get("M1_RUN_SITL") == "1", "SITL test requires explicit opt-in")
 class SitlIntegrationTests(unittest.TestCase):
-    def test_learner_mission_on_existing_sitl(self):
-        required = ("M1_SITL_ENDPOINT", "M1_ARDUPILOT_VERSION", "M1_CONTAINER", "M1_RUN_ID", "M1_RUN_ROOT")
+    def test_pilot_mission_on_existing_sitl(self):
+        required = ("M1_PILOT", "M1_SITL_ENDPOINT", "M1_ARDUPILOT_VERSION", "M1_CONTAINER", "M1_RUN_ID", "M1_RUN_ROOT")
         missing = [name for name in required if not os.environ.get(name)]
         self.assertEqual(missing, [], "Supply actual SITL provenance and a new local run directory")
         arguments = ["--runs", os.environ["M1_RUN_ROOT"], "--run-id", os.environ["M1_RUN_ID"],
                      "--seed", "42", "--scenario", "m1-sitl", "--mode", "offline",
                      "--ardupilot-version", os.environ["M1_ARDUPILOT_VERSION"],
                      "--container", os.environ["M1_CONTAINER"],
-                     "--endpoint", os.environ["M1_SITL_ENDPOINT"], "--timeout", "120",
+                     "--endpoint", os.environ["M1_SITL_ENDPOINT"], "--timeout", "240",
                      "--input-source", "runner", "--input-source", "autopilot",
-                     "--", sys.executable, "-m", "lab.mission_child"]
+                     "--pilot", os.environ["M1_PILOT"], "--profile", "sitl"]
         self.assertEqual(main(arguments), 0, "Inspect failed run evidence before another attempt")
         result = json.loads((Path(os.environ["M1_RUN_ROOT"]) / os.environ["M1_RUN_ID"] / "result.json").read_text())
         self.assertTrue(result["success"])
