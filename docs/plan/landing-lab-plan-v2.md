@@ -4,14 +4,13 @@ Status: **Approved (D-042)** · Date: 2026-11-11 · Source: council rounds 1–4
 
 This plan replaces the scope and sequence parts of `docs/charter.md`.
 The roles, power rules, approval rules and publication rules in the charter stay the same.
-Private career material (gaps, résumé framing, applications) is in a local file and is not part of this document.
+Personal study and career planning is kept outside this repository.
 
 ## 1. Recommendation
 
 Keep the application: an autonomous copter lands on a scaled rooftop vertiport with an AprilTag, or safely aborts and goes around.
-Six council members (four with weight 1.0, two with weight 0.7) agreed on the core over four rounds.
-The weighted round-4 score for the plan as a hiring artifact is approximately 7.4 of 10.
-All members said the same thing: the largest gap that the lab can close is **proof of the owner's own code**.
+A review council of six AI models agreed on the core over four rounds.
+Their shared conclusion: the most valuable thing the lab can show is **clear proof of the owner's own code**.
 Thus the plan puts the owner's own code first and cuts everything that does not help that proof.
 
 The one sentence that must be true first:
@@ -122,8 +121,8 @@ Each step in section 4 ends with a benchmark report. The application milestone (
 
 ## 8. Upstream contributions
 
-- One upstream pull request per month that the owner writes himself.
-- Start: pymavlink PR #1321. The owner rewrites the fix himself, or he answers the review comments himself.
+- Upstream pull requests come from real problems: when the lab hits a bug or a documentation gap in ArduPilot, MAVProxy or pymavlink, an agent records it in `docs/upstream-candidates.md`. The owner picks one and writes the fix himself. Target: approximately one per month, when a good candidate exists.
+- Start: pymavlink PR #1321 (open). The owner reproduces the autotest finding in the lab SITL, learns every line of the patch, and writes the next comment himself.
 - Do not call an open pull request a contribution until it is merged.
 
 ## 9. Rules that do not change
