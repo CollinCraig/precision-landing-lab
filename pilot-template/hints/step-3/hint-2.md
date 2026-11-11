@@ -11,3 +11,5 @@ This file is optional. It gives no code.
 - The hold time is separate from the climb limit.
 
 Open `hint-3.md` only if you want the field names.
+
+Write the number of the highest hint file that you opened in the column "Hint file" of `progress.md`. All hint files are help level 2.

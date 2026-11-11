@@ -149,7 +149,12 @@ def load_pilot(pilot):
     sys.path.insert(0, str(pilot))  # the pilot may keep helper modules next to mission.py
     spec = importlib.util.spec_from_file_location("pilot_mission", path)
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    sys.modules[spec.name] = module  # needed by dataclasses and `from __future__ import annotations`
+    try:
+        spec.loader.exec_module(module)
+    except BaseException:
+        sys.modules.pop(spec.name, None)
+        raise
     version = getattr(module, "PLATFORM_INTERFACE", None)
     if version != INTERFACE_VERSION:
         raise ValueError(f"mission.py uses interface {version!r}; this platform needs {INTERFACE_VERSION}. "

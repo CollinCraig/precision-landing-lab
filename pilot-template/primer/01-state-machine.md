@@ -64,4 +64,4 @@ Read these lines first when a test fails.
 
 ## Time
 
-The M1 hold is measured with the wall clock. SITL runs at speed 1 in M1.
+In M1 you measure the hold with the wall clock. SITL runs at speed 1 in M1.

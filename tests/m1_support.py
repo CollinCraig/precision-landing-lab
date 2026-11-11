@@ -79,7 +79,8 @@ class FakeAutopilot:
     from the start, but arming is denied until GPS has a fix and the EKF uses GPS.
     It sends COMMAND_ACK and STATUSTEXT like the real autopilot.
     Faults: no_heartbeat, not_ready, mode_stuck, arm_stuck (ACK accepted, state
-    unchanged), arm_denied (ACK failed), climb_stuck, telemetry_lost, disarm_stuck.
+    unchanged), arm_denied (ACK failed), climb_stuck, telemetry_lost (after takeoff), telemetry_lost_hold (one second into HOLD),
+    disarm_stuck.
     """
 
     ready_after = 0.4  # seconds from the first read until GPS and EKF are ready
@@ -124,6 +125,8 @@ class FakeAutopilot:
             return None
         if self.fault == "telemetry_lost" and self.takeoff_at is not None:
             return None
+        if self.fault == "telemetry_lost_hold" and self.reached_at is not None and now - self.reached_at >= 1.0:
+            return None  # the telemetry stops one second into HOLD
         if not self.pending:
             if now < self.next_pair:
                 return None

@@ -3,9 +3,10 @@
 Set M1_PILOT to the pilot folder, or use `scripts/learn step N`. Without M1_PILOT the
 tests are skipped, so the platform CI does not run an unfinished pilot.
 Each class is one step. The fake autopilot is the equipment: it does not prove flight safety.
-Failure messages are written in ASD-STE100 Simplified Technical English.
+Failure messages follow ASD-STE100 Simplified Technical English.
 """
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -22,7 +23,20 @@ PILOT = os.environ.get("M1_PILOT")
 LAST_RUN = os.environ.get("M1_LAST_RUN_DIR")
 PHASES = ("CONNECT", "WAIT_READY", "SET_GUIDED", "ARM", "TAKEOFF", "CLIMB", "HOLD", "LAND", "WAIT_DISARM")
 STEPS = {1: PHASES[:2], 2: PHASES[2:4], 3: PHASES[4:7], 4: PHASES[7:]}
+LATER_STUB = re.compile(r"NotImplementedError: STEP ([1-4])")
 BOUNDED = ("timeout", "readiness_failed", "command_rejected", "connection_failed")
+
+
+def hold_us(result):
+    """Length of HOLD in microseconds: from the HOLD event to the next state event.
+
+    With no next state event, HOLD ends when the run stops. Step 3 allows that case only
+    because the stub of step 4 stops the run at once. A later state with its own event does not count.
+    """
+    events = [e for e in result["events"] if e["kind"] in PHASES]
+    index = next(i for i, e in enumerate(events) if e["kind"] == "HOLD")
+    end = events[index + 1]["t_us"] if index + 1 < len(events) else result["duration_us"]
+    return end - events[index]["t_us"]
 
 
 def reported_code(reason):
@@ -47,9 +61,10 @@ class PilotCase(unittest.TestCase):
         elapsed = time.monotonic() - started
         stderr = (path / "mission.stderr").read_text(errors="replace")
         self.stderr_tail = "\n".join(stderr.splitlines()[-14:])
-        if LAST_RUN:  # keep the last run so the owner can read mission.stderr (review A-04)
-            shutil.rmtree(LAST_RUN, ignore_errors=True)
-            shutil.copytree(path, LAST_RUN)
+        if LAST_RUN:  # each test keeps its own run, so the evidence matches the failure
+            keep = Path(LAST_RUN) / self._testMethodName
+            shutil.rmtree(keep, ignore_errors=True)
+            shutil.copytree(path, keep)
         self.assertTrue(fake.closed, "Equipment fault: the transport did not close. Tell the platform agent.")
         return fake, result, elapsed
 
@@ -64,6 +79,22 @@ class PilotCase(unittest.TestCase):
         self.assertEqual(self.phases(result)[:len(wanted)], wanted,
                          self.say(f"Enter the states in this order: {', '.join(wanted)}. "
                                   "Call ap.phase(name) once when you enter each state."))
+
+    def assert_no_failure_in_step(self, result, step):
+        """Reject a failure inside steps 1 to `step`. Allow a stub of a later step, or an end after the step."""
+        if result["success"]:
+            return
+        reason, seen = result["failure_reason"], self.phases(result)
+        later = [p for number in range(step + 1, 5) for p in STEPS[number]]
+        stub = LATER_STUB.search(reason["detail"])
+        ended = "returned without ap.succeed()" in reason["detail"]
+        done = set(p for number in range(1, step + 1) for p in STEPS[number]) <= set(seen)
+        if reason["code"] == "mission_exception" and done and (ended or (stub and int(stub[1]) > step)):
+            return  # the pilot ran the states of this step. The owner has not written the next step yet.
+        if seen and seen[-1] in later and not (stub and int(stub[1]) <= step):
+            return  # the pilot is already working on a later state
+        self.fail(self.say(f"The pilot reported a failure inside step {step}: {reason['code']}: {reason['detail']}. "
+                           "Read the evidence file. Find which state failed."))
 
     def assert_clean(self, fake):
         self.assertEqual(fake.violations, [], self.say(
@@ -93,6 +124,7 @@ class Step1Tests(PilotCase):
     def test_step1_connect_and_wait_ready(self):
         fake, result, _ = self.exercise()
         self.assert_steps_reached(result, 1)
+        self.assert_no_failure_in_step(result, 1)
         self.assertTrue(fake.ready_observed, self.say(
             "Stay in WAIT_READY until GPS and the EKF show that the autopilot can arm."))
         self.assert_clean(fake)
@@ -110,6 +142,7 @@ class Step2Tests(PilotCase):
     def test_step2_guided_and_arm_confirmed(self):
         fake, result, _ = self.exercise()
         self.assert_steps_reached(result, 2)
+        self.assert_no_failure_in_step(result, 2)
         self.assertTrue(fake.guided_observed, self.say("Confirm GUIDED in a heartbeat."))
         self.assertTrue(fake.arm_observed, self.say("Confirm the armed bit in a heartbeat before you leave ARM."))
         self.assert_clean(fake)
@@ -130,9 +163,9 @@ class Step3Tests(PilotCase):
     def test_step3_takeoff_climb_hold(self):
         fake, result, _ = self.exercise()
         self.assert_steps_reached(result, 3)
+        self.assert_no_failure_in_step(result, 3)
         self.assertIsNotNone(fake.reached_at, self.say("Reach at least 4.75 m relative height."))
-        times = {e["kind"]: e["t_us"] for e in result["events"] if e["kind"] in PHASES}
-        self.assertGreaterEqual(result["duration_us"] - times["HOLD"], 5_000_000, self.say(
+        self.assertGreaterEqual(hold_us(result), 5_000_000, self.say(
             "Hold for at least 5 seconds after you enter HOLD. Keep reading telemetry during the hold."))
         self.assert_clean(fake)
 
@@ -141,6 +174,10 @@ class Step3Tests(PilotCase):
 
     def test_step3_telemetry_stops_after_takeoff(self):
         self.assert_bounded_failure("telemetry_lost", "CLIMB", 5)
+
+    def test_step3_telemetry_stops_during_hold(self):
+        fake, _ = self.assert_bounded_failure("telemetry_lost_hold", "HOLD", 12)
+        self.assertIsNotNone(fake.reached_at, self.say("The fault starts after the climb. Reach the height first."))
 
 
 class Step4Tests(PilotCase):

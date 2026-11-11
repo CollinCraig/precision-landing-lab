@@ -10,3 +10,5 @@ This file is optional. It gives field references, not a working state.
 
 - Report success with `ap.succeed()` only after the disarm proof.
 - Report `timeout` with the state name WAIT_DISARM when the limit ends.
+
+Write the number of the highest hint file that you opened in the column "Hint file" of `progress.md`. All hint files are help level 2.

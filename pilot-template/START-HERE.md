@@ -51,7 +51,8 @@ That file shows every ACK, every STATUSTEXT and your own lines.
 ## Help
 
 - Use no help first. Read the failing test message.
-- Use one hint file at a time. Write the highest hint number in `progress.md`.
+- Use one hint file at a time. All hint files are help level 2.
+- Write the number of the highest hint file that you opened (1 to 3) in the column "Hint file" of `progress.md`.
 - A tutor agent asks questions. It does not write your code.
 - If the fake autopilot or a test looks wrong, tell the platform agent. This is not your fault.
 

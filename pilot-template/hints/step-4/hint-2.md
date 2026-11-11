@@ -9,3 +9,5 @@ This file is optional. It gives no code.
 - After a landing request, the old armed heartbeats still arrive. Question: How do you not confuse them with a disarm?
 
 Open `hint-3.md` only if you want the field names.
+
+Write the number of the highest hint file that you opened in the column "Hint file" of `progress.md`. All hint files are help level 2.

@@ -4,7 +4,7 @@ Procedures in this repository follow ASD-STE100 Simplified Technical English.
 
 This plan replaces the study-first order for M1 (review A-09). You do before you read.
 Each session takes 30 to 60 minutes. Reading takes 20 minutes at most. Stop at the end of the session.
-After each session, write one row in `progress.md`. The row has the date, the session, what you finished, your next action and your highest help level.
+After each session, write one row in `progress.md`. The row has the date, the session, what you finished, your next action and your hint file number. The tutor adds the help level. All hint files are help level 2.
 
 | # | Session | Read (max 20 min) | Do | Result you can see |
 |---|---|---|---|---|
@@ -26,4 +26,4 @@ After each session, write one row in `progress.md`. The row has the date, the se
 
 ## After session 6
 
-Session 6 is the gate for M1. When the gate passes, M1 is accepted. Work for M2 starts only after that (review A-12).
+Session 6 is the gate for M1. When the gate passes, M1 ends. Work for M2 starts only after that (review A-12).

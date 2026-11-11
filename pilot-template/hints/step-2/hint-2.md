@@ -9,3 +9,5 @@ This file is optional. It gives no code.
 - Each state has its own time limit: `budgets.guided_s` and `budgets.arm_s`.
 
 Open `hint-3.md` only if you want the field names.
+
+Write the number of the highest hint file that you opened in the column "Hint file" of `progress.md`. All hint files are help level 2.

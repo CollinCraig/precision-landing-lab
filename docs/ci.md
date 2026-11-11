@@ -8,7 +8,7 @@ Each third-party action is pinned by full commit SHA.
 
 | Job | What it checks |
 |---|---|
-| `python` | Builds `plv`. Runs `tests/test_runner.py` and the M1 platform tests (`test_m1_infrastructure`, `test_pilot_api`, `test_learn_cli`) with `unittest` on Python 3.12. Pilot step tests skip without `M1_PILOT`. The tests use the `plv` binary for the end-to-end case. |
+| `python` | Builds `plv`. Runs `tests/test_runner.py` and the M1 platform tests (`test_m1_infrastructure`, `test_pilot_api`, `test_learn_cli`, `test_step_checks`) with `unittest` on Python 3.12. Pilot step tests skip without `M1_PILOT`. The tests use the `plv` binary for the end-to-end case. |
 | `rust` | In `validator/`, with Rust 1.75.0 (the minimum supported version): `cargo fmt --check`, `cargo clippy` and `cargo test`. |
 | `viewer` | Runs `node --test viewer/tests/` on Node 24.11.0 (LTS). |
 | `hygiene` | Runs `.github/scripts/hygiene.sh`. It fails on the items in the next list. |

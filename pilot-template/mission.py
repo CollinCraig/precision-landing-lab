@@ -12,17 +12,18 @@ PLATFORM_INTERFACE = 1  # Do not change this line. `./learn doctor` checks it.
 
 
 def run(ap, budgets):
-    """Fly the M1 mission. Enter the nine states in this order, once each.
+    """Fly the M1 mission. This function is yours to design.
 
     `ap` sends commands and gives decoded messages. `budgets` holds one time limit
     in seconds for each wait (budgets.connect_s, budgets.ready_s and so on).
-    A state function returns True when its state is confirmed.
-    When a state fails, the state function calls ap.fail(code, detail) and returns False.
+    The mission has nine states, below. Each state function has its own question.
+    Call ap.succeed() or ap.fail(code, detail) to report the result.
+    Start run() in step 1 with the two states of step 1. Add the next states in each step.
+
+    Question: In which order do you enter the states? What do you do when one state fails?
+    Question: What must be true before you leave one state and enter the next?
     """
-    for state in (connect, wait_ready, set_guided, arm, takeoff, climb, hold, land, wait_disarm):
-        if not state(ap, budgets):
-            return  # the state already reported the failure
-    ap.succeed()
+    raise NotImplementedError("STEP 1: write run()")
 
 
 def connect(ap, budgets) -> bool:

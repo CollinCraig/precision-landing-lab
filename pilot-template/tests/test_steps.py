@@ -2,7 +2,7 @@
 
 Run all steps:      python -m unittest -v tests.test_steps
 Run one step:       ./learn step 1
-Each test class is one step. The empty starter code fails them all. This is expected.
+Each test class is one step. The empty starter code fails them all. Expect this.
 """
 import os
 import sys

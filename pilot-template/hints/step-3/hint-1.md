@@ -7,3 +7,5 @@ This file is optional. Use it only if you want help.
 - Question: Which clock measures the hold? What do you read during the hold?
 
 Open `hint-2.md` only if you want more help.
+
+Write the number of the highest hint file that you opened in the column "Hint file" of `progress.md`. All hint files are help level 2.

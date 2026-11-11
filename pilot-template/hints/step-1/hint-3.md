@@ -13,3 +13,5 @@ This file is optional. It gives field references, not a working state.
 - The real flight waited 3 more seconds after the EKF text. Decide yourself if you need a pause.
 - The fake autopilot becomes ready after less than 1 second. It sends the same signs as the real one.
 - Report `readiness_failed` or `timeout` when the limit ends. Put the state name in the detail.
+
+Write the number of the highest hint file that you opened in the column "Hint file" of `progress.md`. All hint files are help level 2.

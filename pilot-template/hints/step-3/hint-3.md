@@ -11,3 +11,5 @@ This file is optional. It gives field references, not a working state.
 
 - Parameters 1 to 6 of the takeoff request are 0 in this mission.
 - Report `timeout` with the state name CLIMB when the height does not arrive.
+
+Write the number of the highest hint file that you opened in the column "Hint file" of `progress.md`. All hint files are help level 2.

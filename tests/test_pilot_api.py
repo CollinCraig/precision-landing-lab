@@ -202,6 +202,20 @@ class RunnerPilotTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             load_pilot(self.pilot("x = 1\n"))
 
+    def test_loader_accepts_future_annotations_and_dataclasses(self):
+        """A dataclass needs its module in sys.modules while the module runs (review finding 5)."""
+        source = ("from __future__ import annotations\n"
+                  "from dataclasses import dataclass\n"
+                  "PLATFORM_INTERFACE = 1\n"
+                  "@dataclass\nclass Sample:\n    height: float\n    seen: bool = False\n"
+                  "SAMPLE = Sample(1.5)\n"
+                  "def run(ap, budgets):\n    return SAMPLE.height\n")
+        run = load_pilot(self.pilot(source, interface=""))
+        self.assertEqual(run(None, None), 1.5)
+        with self.assertRaises(ZeroDivisionError):  # an import error leaves no module behind
+            load_pilot(self.pilot("1 / 0\n"))
+        self.assertNotIn("pilot_mission", sys.modules)
+
     def test_cli_pilot_option(self):
         with tempfile.TemporaryDirectory() as empty, patch("sys.stderr", io.StringIO()), \
                 self.assertRaises(SystemExit) as stop:

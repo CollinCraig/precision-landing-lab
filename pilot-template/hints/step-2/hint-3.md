@@ -11,3 +11,5 @@ This file is optional. It gives field references, not a working state.
 | ACK result | `COMMAND_ACK.result`. 0 is ACCEPTED. `mavlite.RESULT_NAMES` lists the names. |
 
 - Use failure code `command_rejected` for a refusal. Use `timeout` when nothing happens.
+
+Write the number of the highest hint file that you opened in the column "Hint file" of `progress.md`. All hint files are help level 2.

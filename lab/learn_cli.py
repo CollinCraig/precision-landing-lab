@@ -29,9 +29,26 @@ def pilot_path(value):
     return Path(value or os.environ.get("LANDING_PILOT") or DEFAULT_PILOT).expanduser().resolve()
 
 
-def git(*args, cwd, check=True):
+GIT_KEEP = ("PATH", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR")
+
+
+def git_env(identity=None):
+    """Return a clean environment for Git. It copies no GIT_* variable from the caller.
+
+    Without it, GIT_DIR, GIT_WORK_TREE, GIT_INDEX_FILE and the author variables
+    can send a command to another repository or give a commit another author.
+    """
+    env = {key: os.environ[key] for key in GIT_KEEP if key in os.environ}
+    env.update(GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    if identity:
+        name, email = identity
+        env.update(GIT_AUTHOR_NAME=name, GIT_AUTHOR_EMAIL=email, GIT_COMMITTER_NAME=name, GIT_COMMITTER_EMAIL=email)
+    return env
+
+
+def git(*args, cwd, check=True, identity=None):
     return subprocess.run(["git", *args], cwd=cwd, check=check, capture_output=True, text=True,
-                          env={**os.environ, "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"})
+                          env=git_env(identity))
 
 
 def agent_identity():
@@ -50,23 +67,51 @@ def platform_commit():
         return None, False
 
 
+def inside_platform(dest):
+    """True when `dest` is the platform folder or a folder below it (D-038: two repositories)."""
+    root = PLATFORM_ROOT.resolve()
+    dest = dest.resolve()
+    return dest == root or root in dest.parents
+
+
 def init(dest):
-    """Create the pilot repository: one agent commit, no remote."""
-    if dest.exists() and any(dest.iterdir()):
-        print(f"Stop. {dest} exists and is not empty. Nothing was changed.")
+    """Create the pilot repository: one agent commit, no remote.
+
+    The files go into a new folder next to `dest`. A rename then puts the folder in place.
+    The rename fails when `dest` has files, so a second init cannot overwrite owner work.
+    """
+    dest = dest.resolve()
+    if inside_platform(dest):
+        print(f"Stop. {dest} is inside the platform repository. Choose a folder outside it. Init changed nothing.")
+        return 1
+    if dest.exists() and (not dest.is_dir() or any(dest.iterdir())):
+        print(f"Stop. {dest} exists and is not an empty folder. Init changed nothing.")
         return 1
     commit, dirty = platform_commit()
-    shutil.copytree(TEMPLATE, dest, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__"))
-    (dest / "PLATFORM_PIN").write_text(
-        "# The platform version that this repository needs. `./learn doctor` checks it.\n"
-        f"platform_commit = {commit or 'unknown'}\n"
-        f"interface = {INTERFACE_VERSION}\n")
-    (dest / ".platform-path").write_text(str(PLATFORM_ROOT) + "\n")  # local file, not in Git
-    name, email = agent_identity()
-    git("init", "-q", "-b", "main", cwd=dest)
-    git("add", "-A", cwd=dest)
-    git("-c", f"user.name={name}", "-c", f"user.email={email}", "-c", "commit.gpgsign=false",
-        "-c", f"core.hooksPath={os.devnull}", "commit", "-q", "-m", COMMIT_MESSAGE, cwd=dest)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    staging = dest.parent / f".{dest.name}.new-{os.getpid()}"
+    staging.mkdir()  # fails when the name exists: exclusive creation
+    try:
+        shutil.copytree(TEMPLATE, staging, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__"))
+        (staging / "PLATFORM_PIN").write_text(
+            "# The platform version that this repository needs. `./learn doctor` checks it.\n"
+            f"platform_commit = {commit or 'unknown'}\n"
+            f"interface = {INTERFACE_VERSION}\n")
+        (staging / ".platform-path").write_text(str(PLATFORM_ROOT) + "\n")  # local file, not in Git
+        identity = agent_identity()
+        name, email = identity
+        git("init", "-q", "-b", "main", cwd=staging)
+        git("add", "-A", cwd=staging)
+        git("-c", f"user.name={name}", "-c", f"user.email={email}", "-c", "commit.gpgsign=false",
+            "-c", f"core.hooksPath={os.devnull}", "commit", "-q", "-m", COMMIT_MESSAGE,
+            cwd=staging, identity=identity)
+        try:
+            os.rename(staging, dest)  # replaces an empty folder only; fails when `dest` has files
+        except OSError:
+            print(f"Stop. Another process filled {dest} while init ran. Init overwrote nothing.")
+            return 1
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     print(f"Created {dest} with one commit: {COMMIT_MESSAGE!r}. It has no remote.")
     if dirty:
         print("Warning: the platform has uncommitted changes. The pin names the last commit only.")
@@ -79,11 +124,12 @@ class StepResult(unittest.TestResult):
 
     def __init__(self):
         super().__init__()
-        self.rows = []  # (test name, passed, message)
+        self.rows = []  # (test name, passed, message, evidence folder)
 
     def _row(self, test, passed, message=""):
         name = test._testMethodName.split("_", 2)[-1].replace("_", " ")
-        self.rows.append((name, passed, message))
+        evidence = f"local/last-run/{test._testMethodName}"  # the test saves its own run here
+        self.rows.append((name, passed, message, evidence))
 
     def addSuccess(self, test):
         super().addSuccess(test)
@@ -102,7 +148,7 @@ def run_step(pilot, number):
     """Run the tests of one step against the pilot folder. Return a StepResult."""
     os.environ["M1_PILOT"] = str(pilot)
     os.environ["M1_LAST_RUN_DIR"] = str(pilot / "local" / "last-run")
-    (pilot / "local").mkdir(exist_ok=True)
+    (pilot / "local" / "last-run").mkdir(parents=True, exist_ok=True)
     sys.path[:0] = [str(PLATFORM_ROOT / "tests")]
     sys.modules.pop("test_pilot_steps", None)  # the module reads M1_PILOT at import
     import test_pilot_steps
@@ -114,7 +160,7 @@ def run_step(pilot, number):
 
 def next_action(number, passed):
     if not passed:
-        return (f"Read the failure message. Then read local/last-run/mission.stderr. "
+        return (f"Read the failure message. Then read the evidence file that it names. "
                 f"Optional help: hints/step-{number}/hint-1.md.")
     if number < STEP_COUNT:
         return f"Add a row to progress.md. Then start step {number + 1}."
@@ -126,11 +172,13 @@ def step(pilot, number):
         print(f"Use a step from 1 to {STEP_COUNT}.")
         return 2
     result = run_step(pilot, number)
-    for name, passed, _ in result.rows:
+    for name, passed, *_ in result.rows:
         print(f"{'PASS' if passed else 'FAIL'}  step {number}  {name}")
     failed = [row for row in result.rows if not row[1]]
     if failed:
         print(f"\nFirst failure: {failed[0][0]}\n{failed[0][2]}")
+        if (pilot / failed[0][3] / "mission.stderr").is_file():
+            print(f"Evidence for this failure: {failed[0][3]}/mission.stderr")
     print(f"\nStep {number}: {len(result.rows) - len(failed)} of {len(result.rows)} tests pass.")
     print("Next action:", next_action(number, not failed))
     return 1 if failed else 0
