@@ -19,11 +19,20 @@ degrades to "NO RESULT"); `viewer.json` is required. `plv check` ignores
 `viewer.json` (unknown extra files are outside the M1 contract), and it is a
 derived artifact: regenerate it, never treat it as evidence.
 
-## Producer (follow-up for the M1 team)
+## Producer
 
-A Python exporter in `lab/` (not part of this change) should write
-`viewer.json` after the run is complete. Proposed mapping, all from the
-filtered tlog plus `result.json`:
+`lab/export_tlog.py` writes `viewer.json` from a tlog (procedure:
+`docs/export-flight.md`). It follows the mapping below, with these
+differences: it takes time zero from the first tlog record (there is no
+`manifest.json` for a manual SITL flight), it writes no `series.state` and no
+`states` (a tlog has no mission state), and it adds the optional columns
+`series.roll`, `series.pitch` and `series.yaw` (degrees, from ATTITUDE; the
+viewer ignores them). It also writes a derived `result.json` that has
+`"derived": true`, no verdict, and events for COMMAND_ACK, STATUSTEXT, mode
+changes and arm changes. Event kinds: `ack:<command>:<result>`,
+`statustext:<severity>: <text>`, `mode:<NAME>`, `armed`, `disarmed`.
+
+Proposed mapping, all from the filtered tlog plus `result.json`:
 
 | viewer.json field | Source |
 | --- | --- |
@@ -49,7 +58,7 @@ If the pad is not at home, set `pad`.
 {
   "schema_version": 1,
   "run_id": "EXAMPLE",
-  "source": {"kind": "tlog", "generator": "lab/export_viewer.py"},
+  "source": {"kind": "tlog", "generator": "lab/export_tlog.py"},
   "frame": {"name": "NED", "origin": "home", "units": "m"},
   "pad": {"n": 0.0, "e": 0.0},
   "modes": ["STABILIZE", "GUIDED", "LAND"],
