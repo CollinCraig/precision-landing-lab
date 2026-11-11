@@ -77,6 +77,7 @@ multi-aircraft vertiport sequencing, replayed real traffic data, learned percept
 - [ ] Dependencies and their licenses listed.
 - [ ] `runs/`, videos and logs not committed unless Collin chose them.
 - [ ] README is accurate: status honest, no overclaiming.
+- [ ] "How this was built" section matches reality (D-018): Collin's pieces vs agent-built.
 - [ ] Collin reviewed the exact file list and history to be pushed.
 
 ## Remote & lid-closed acceptance tests (set up in M0/M1, after approval)

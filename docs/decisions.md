@@ -23,6 +23,7 @@ Format: ID · decision · why · status. Newest decisions are appended.
 | D-015 | First-round upgrades: vertiport world (M2), presentation video with overlay (M3), abort/go-around (M3), AAM conditions (M4), results page per milestone. ~2–3 extra weeks overall. | Traction without delaying first flight; agents build most of it. | Decided |
 | D-016 | VTOL/QuadPlane, simulated ADS-B traffic, multi-aircraft vertiport go to a post-M5 roadmap, planned over time. | Keeps first round finishable at 3–5 h/week. | Decided |
 | D-017 | Audience: public/open source and school. | Shapes README/report tone: clear, honest, results-first. | Decided |
+| D-018 | Public attribution: README leads with the AAM project and results, a one-line "built by one learner + AI agent team (Claude + Codex)" hook, and a "How this was built" section linking Collin's own pieces vs agent-built parts. Decision log and briefs stay public. Co-author lines kept on commits. | Honest, credible for school/public, makes Collin's pieces stand out. | Decided |
 | D-013 | Repo name `precision-landing-lab`. Local folder name may stay as-is. | Standard community term, discoverable. | Proposed (Collin leaning B) |
 
 ## Proposed defaults (no objection raised)
@@ -55,4 +56,3 @@ Format: ID · decision · why · status. Newest decisions are appended.
 - Gazebo wind support on the pinned version (before M4).
 - Roadmap feasibility on pinned versions: QuadPlane precision landing, SITL ADS-B traffic simulation.
 - GPU state decides vertiport/video visual fidelity (fallbacks: lighter visuals, StarkPC rendering).
-- How Collin-built vs agent-built work is disclosed publicly.
