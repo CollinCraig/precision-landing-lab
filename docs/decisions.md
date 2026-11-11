@@ -24,6 +24,7 @@ Format: ID · decision · why · status. Newest decisions are appended.
 | D-016 | VTOL/QuadPlane, simulated ADS-B traffic, multi-aircraft vertiport go to a post-M5 roadmap, planned over time. | Keeps first round finishable at 3–5 h/week. | Decided |
 | D-017 | Audience: public/open source and school. | Shapes README/report tone: clear, honest, results-first. | Decided |
 | D-018 | Public attribution: README leads with the AAM project and results, a one-line "built by one learner + AI agent team (Claude + Codex)" hook, and a "How this was built" section linking Collin's own pieces vs agent-built parts. Decision log and briefs stay public. Co-author lines kept on commits. | Honest, credible for school/public, makes Collin's pieces stand out. | Decided |
+| D-019 | M0 accepted (2026-11-11) with noted gap: incomplete early command log. Approved: A1 (normal `omarchy-update` first, then `pacman -S --needed podman distrobox`, run by Collin), A2, A3, A7. Deferred: A4 (built as repo code in M1), A5/A6 (need a concrete service preview), A8/A9 (M2), A10 (after M1 runner). Findings: `nvidia-smi` works (no repair); AC lid policy already `ignore`. | Item-by-item approval per D-012. | Decided |
 | D-013 | Repo name `precision-landing-lab`. Local folder name may stay as-is. | Standard community term, discoverable. | Proposed (Collin leaning B) |
 
 ## Proposed defaults (no objection raised)
