@@ -5,6 +5,10 @@ Scope: coordinator authorized A2 early solely to unblock validator, plus contain
 Rust/Cargo and linker tooling. No ArduPilot prerequisites/build, mission execution,
 host sudo/install/config/service changes, merge, push, or coordinator STATE edits.
 
+Paths below use variables and a worktree placeholder to protect private data.
+The recorded results describe the original setup and tests.
+This document update does not repeat those operations.
+
 ## Verified environment
 
 - Host tools checked before container work: podman 6.1.4-1; distrobox 1.8.2.5-1.
@@ -14,7 +18,8 @@ host sudo/install/config/service changes, merge, push, or coordinator STATE edit
 - Image ID: d9b8c34d61a9b9a3c44cab883d7d2f2619d674966ab520186f799cf32e3e0377.
 - Selected architecture manifest in RepoDigests: sha256:78d4744ead1f5b19b04d0df558ab182a5300903900755e515b2ca4d10eb2044d.
 - Container OS identifies Ubuntu 24.04.5 LTS (Noble).
-- Dedicated initially unused home: /home/USER/.local/share/landing-lab-home,
+- Dedicated initially unused home: `$LAB_HOME`,
+  with host path `$HOME/.local/share/landing-lab-home`,
   verified as HOME inside landing-lab and outside all project worktrees.
 - AC0 type=Mains, online=1 verified before pull, initialization, apt installation,
   build and test. These are startup checks, not the pending A4 continuous power guard.
@@ -32,7 +37,8 @@ test "$(cat /sys/class/power_supply/AC0/type)" = Mains
 test "$(cat /sys/class/power_supply/AC0/online)" = 1
 podman info --format '{{.Host.Security.Rootless}}'
 UBUNTU_IMAGE=docker.io/library/ubuntu@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
-LAB_HOME=/home/USER/.local/share/landing-lab-home
+PROJECT="$HOME/Projects/autonomy-landing-lab"
+LAB_HOME="$HOME/.local/share/landing-lab-home"
 podman pull --arch amd64 "$UBUNTU_IMAGE"
 test ! -e "$LAB_HOME"
 mkdir -p "$LAB_HOME"
@@ -43,14 +49,14 @@ distrobox enter landing-lab -- bash -lc '
   . /run/.containerenv
   test "$name" = landing-lab
   test "$rootless" = 1
-  test "$HOME" = /home/USER/.local/share/landing-lab-home
+  test "$HOME" = "$1"
   dpkg --print-architecture
   sudo apt-get update
   sudo apt-get install -y rustc cargo build-essential
   rustc --version --verbose
   cargo --version
   dpkg-query -W
-'
+' bash "$LAB_HOME"
 ```
 
 First entry initializes Distrobox integration packages inside Ubuntu. Complete
@@ -74,11 +80,14 @@ No host repair was attempted.
 ## Validator validation and rework
 
 Target existing worktree:
- /home/USER/.t3/worktrees/autonomy-landing-lab/t3-ee95f567-b66030f95fae7812/validator
+ `<worktree>/validator`
 on m1/validator, base HEAD 71c19e061f70b75ae8718a8bfe2a8fb069b88d90.
 Tests included coordinator's uncommitted D1–D4 revisions and regressions.
 No validator files were edited, staged, committed or discarded by this task.
 Build artifacts were redirected into dedicated home.
+
+Use the same host shell as the setup commands.
+Replace `<worktree>` with the path to the existing validator worktree.
 
 ```sh
 distrobox enter landing-lab -- bash -lc '
@@ -86,12 +95,12 @@ distrobox enter landing-lab -- bash -lc '
   . /run/.containerenv
   test "$name" = landing-lab
   test "$rootless" = 1
-  test "$HOME" = /home/USER/.local/share/landing-lab-home
+  test "$HOME" = "$1"
   export CARGO_TARGET_DIR="$HOME/validator-target"
-  cd /home/USER/.t3/worktrees/autonomy-landing-lab/t3-ee95f567-b66030f95fae7812/validator
+  cd "$2/validator"
   cargo build --locked
   cargo test --locked
-'
+' bash "$LAB_HOME" '<worktree>'
 ```
 
 Build: exit 0. Test: exit 101. One library unit test passed; main has zero tests;
@@ -107,7 +116,9 @@ Coordinator owns subsequent fixes/commit and fresh review.
 
 ## Local evidence and audit limits
 
-Private evidence directory: /home/USER/Projects/autonomy-landing-lab/local/m1/
+Private evidence directory: `$PROJECT/local/m1/`.
+The setup commands define `$PROJECT` as the main project directory.
+Keep raw private data in ignored `local/`.
 
 - commands.log: commands logged before execution.
 - preflight.log, image-pull.log, container-create.log, verification.log:
