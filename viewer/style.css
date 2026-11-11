@@ -38,8 +38,6 @@ select{max-width:min(100%,320px);border-radius:10px;padding:7px 10px}
 .btn:focus-visible,select:focus-visible,.track:focus-visible,.speeds button:focus-visible{outline:2px solid var(--vblue);outline-offset:2px}
 .btn[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink);min-width:78px;text-align:center}
-.btn.sm{padding:5px 10px;font-size:12px;background:rgba(10,14,18,.55);color:#e9f3f6;border-color:rgba(233,243,246,.25);backdrop-filter:blur(4px)}
-.btn.sm[aria-pressed="true"]{background:#e9f3f6;color:#0d1115}
 
 /* run header */
 .runhead{padding:16px 0 4px}
@@ -83,7 +81,9 @@ main{margin-top:14px}
 .hud-bl{left:12px;bottom:12px;display:flex;gap:18px;font-size:12px}
 .rd b{font:600 19px var(--mono);color:#fff;margin-right:3px;font-variant-numeric:tabular-nums}
 .rd .u{font-size:11px;color:#9aa6ae}
-.scene-tools{position:absolute;right:12px;bottom:12px;display:flex;gap:6px}
+.viewbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin-top:10px}
+.viewbar .vb-sp{flex:1}
+.btn.sm2{padding:5px 12px;font-size:12.5px}
 .rec-progress,.rec-exit{display:none}
 
 /* timeline panel */
