@@ -78,9 +78,11 @@ class FakeAutopilot:
     It follows the first real SITL flight (D-038, review A-03): HEARTBEAT says STANDBY
     from the start, but arming is denied until GPS has a fix and the EKF uses GPS.
     It sends COMMAND_ACK and STATUSTEXT like the real autopilot.
+    A refused command gives a STATUSTEXT with the reason, then a COMMAND_ACK that is not 0.
     Faults: no_heartbeat, not_ready, mode_stuck, arm_stuck (ACK accepted, state
-    unchanged), arm_denied (ACK failed), climb_stuck, telemetry_lost (after takeoff), telemetry_lost_hold (one second into HOLD),
-    disarm_stuck.
+    unchanged), arm_denied (STATUSTEXT, then ACK failed), climb_stuck,
+    telemetry_lost (all messages stop after the takeoff request, so no takeoff ACK arrives),
+    telemetry_lost_hold (one second into HOLD), disarm_stuck.
     """
 
     ready_after = 0.4  # seconds from the first read until GPS and EKF are ready
@@ -195,11 +197,11 @@ class FakeAutopilot:
                 self.violations.append("Explicit disarm command")
             elif not self.ready_observed or not self.guided_observed or self.mode != 4:
                 self.violations.append("Arm before readiness and GUIDED were observed")
+                self._text(3, "Arm: Need Position Estimate")  # the reason comes first, as in ArduPilot
                 self._ack(command, 4)
-                self._text(3, "Arm: Need Position Estimate")
             elif self.fault == "arm_denied":
+                self._text(3, "PreArm: Compass not healthy")  # the reason comes first, as in ArduPilot
                 self._ack(command, 4)
-                self._text(3, "PreArm: Compass not healthy")
             else:
                 self._ack(command, 0)  # accepted, even in arm_stuck: ACK is not state
                 if self.fault != "arm_stuck":

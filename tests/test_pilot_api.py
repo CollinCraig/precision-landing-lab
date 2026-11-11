@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))  # tests import m1_supp
 from lab import mavlite
 from lab.link import Connection, Evidence
 from lab.mission_io import MissionClient
-from lab.pilot_api import PROFILES, Autopilot, load_pilot, pilot_command
+from lab.pilot_api import FAIL_CODES, PROFILES, Autopilot, load_pilot, pilot_command
 from lab.run import main as run_main, run
 from m1_support import FakeAutopilot, Message, metadata, read_selected_tlog
 
@@ -28,6 +28,23 @@ REAL = {
     "text": "fd0e0000320101fd00000641726d696e67206d6f746f727332d4",
     "position": "fd1c00000201012100004fc900009ffeebeacacee8588efa0800ff1000000000000085ffcf893917",
 }
+
+
+class BudgetAndCodeTests(unittest.TestCase):
+    def test_budgets_name_a_takeoff_limit_and_a_telemetry_gap_limit(self):
+        for name, budgets in PROFILES.items():
+            self.assertGreater(budgets.takeoff_s, 0, name)
+            self.assertGreater(budgets.telemetry_gap_s, 0, name)
+            self.assertLess(budgets.telemetry_gap_s, budgets.hold_s, name)  # a gap must fit inside the hold
+        self.assertEqual(PROFILES["fake"].takeoff_s, 2.0)
+        self.assertEqual(PROFILES["fake"].telemetry_gap_s, 1.0)
+
+    def test_fail_with_an_unknown_code_lists_the_valid_codes(self):
+        ap = Autopilot(FakeClient([]), log_stream=io.StringIO())
+        with self.assertRaises(ValueError) as caught:
+            ap.fail("oops", "ARM: no")
+        for code in FAIL_CODES:
+            self.assertIn(code, str(caught.exception))
 
 
 class CodecTests(unittest.TestCase):

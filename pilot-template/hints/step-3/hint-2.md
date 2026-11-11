@@ -7,9 +7,10 @@ This file is optional. It gives no code.
 - A receive that returns `None` means: no message. It does not mean: state confirmed.
 - Convert `relative_alt` from millimetres to metres before you compare.
 - Start the 5 second hold only after the height reaches 4.75 m.
-- Keep reading telemetry during the hold. Question: What if it stops?
+- Keep reading telemetry during the hold. Question: What if it stops? `budgets.telemetry_gap_s` gives the limit.
+- A missing ACK is a fault. It is not a pass. The ACK is not the proof of height.
 - The hold time is separate from the climb limit.
 
-Open `hint-3.md` only if you want the field names.
+Open `hint-3.md` only if you want design help. The names are in `API.md`.
 
 Write the number of the highest hint file that you opened in the column "Hint file" of `progress.md`. All hint files are help level 2.

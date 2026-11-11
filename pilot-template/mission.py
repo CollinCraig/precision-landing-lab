@@ -16,6 +16,7 @@ def run(ap, budgets):
 
     `ap` sends commands and gives decoded messages. `budgets` holds one time limit
     in seconds for each wait (budgets.connect_s, budgets.ready_s and so on).
+    API.md lists every name: the `ap` methods, the message fields, the budgets and the failure codes.
     The mission has nine states, below. Each state function has its own question.
     Call ap.succeed() or ap.fail(code, detail) to report the result.
     Start run() in step 1 with the two states of step 1. Add the next states in each step.
@@ -68,6 +69,8 @@ def takeoff(ap, budgets) -> bool:
     """STEP 3. State TAKEOFF. Call ap.phase("TAKEOFF") first. Request a height of 5 m.
 
     Question: Which ACK result do you accept? What do you do with any other result?
+    Question: What do you do when no ACK arrives? Is the ACK the proof that the aircraft climbs?
+    Time limit: budgets.takeoff_s.
     """
     raise NotImplementedError("STEP 3: write takeoff()")
 
@@ -87,6 +90,7 @@ def hold(ap, budgets) -> bool:
 
     Question: Which clock do you use to measure the time?
     Question: What do you check while you wait? What do you do if the telemetry stops?
+    Limit: budgets.telemetry_gap_s is the longest silence that you accept.
     """
     raise NotImplementedError("STEP 3: write hold()")
 

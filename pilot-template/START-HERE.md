@@ -14,14 +14,15 @@ Each session takes 30 to 60 minutes. Stop at the end of the session. Do not read
 
 | Session | What you do | Code |
 |---|---|---|
-| 1 | Read `primer/01-state-machine.md`. Type the commands of one manual SITL flight yourself. Watch the replay in the viewer. | none |
+| 1 | Read `primer/01-state-machine.md`. Follow `SESSION-1.md`. Type the commands of one manual SITL flight yourself. Watch the replay in the viewer. | none |
 | 2 | Run `./learn listen`. Read the ACK and STATUSTEXT lines. Write step 1. | step 1 |
-| 3 | Write step 2. Make the fake refuse your arm command and read why. | step 2 |
+| 3 | Write step 2. Run `./learn fake --fault arm_denied` and read why the fake refuses. | step 2 |
 | 4 | Write step 3. Measure height and hold time. | step 3 |
 | 5 | Write step 4. Run all fault tests. | step 4 |
 | 6 | Fly your code in SITL. Replay the run. Do the mastery gate. | gate |
 
 Details are in the platform file `docs/learning/m1-sessions.md`.
+The names that you need are in `API.md`. Open it at any time.
 
 ## Commands
 
@@ -31,19 +32,22 @@ Run all commands from this folder.
 |---|---|
 | `./learn status` | Show which steps pass. Show your next action. |
 | `./learn step 1` | Run the tests for step 1. Use 2, 3 or 4 for the other steps. |
-| `./learn listen --seconds 20` | Print decoded messages from a running SITL. |
+| `./learn listen --seconds 20` | Print decoded messages from a running SITL. It says so when SITL is not running. |
+| `./learn fake --fault NAME` | Run your mission once against the fake autopilot. `API.md` lists the fault names. |
 | `./learn doctor` | Check the platform path and the platform pin. |
 
-When a test fails, read the message. Then read `local/last-run/mission.stderr`.
-That file shows every ACK, every STATUSTEXT and your own lines.
+When a test fails, read the message. Then read the evidence file that the message names.
+The path is `local/last-run/test_<name>/mission.stderr`. It shows every ACK, every STATUSTEXT and your own lines.
 
 ## Files
 
 | File | Purpose |
 |---|---|
 | `mission.py` | Your code. Nine states. Each has a question. |
+| `API.md` | The names: `ap` methods, message fields, `budgets`, failure codes and fault names. |
+| `SESSION-1.md` | How to fly by hand in SITL and replay the flight. |
 | `primer/01-state-machine.md` | The ideas for M1. One page. |
-| `hints/step-N/hint-1.md` to `hint-3.md` | Optional help. Use one hint at a time. |
+| `hints/step-N/hint-1.md` to `hint-3.md` | Optional help. Use one hint at a time. Hint 3 gives design help. It does not give names. |
 | `notes/m1.md` | Your own explanation. You write it in the mastery gate. |
 | `progress.md` | One row for each session. You write it. |
 | `PLATFORM_PIN` | The platform version that this repository needs. |

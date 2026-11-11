@@ -77,6 +77,38 @@ class LearnerTextTests(unittest.TestCase):
                     problems.append(f"{where}: passive voice: {sentence[:60]}")
         self.assertEqual(problems, [])
 
+    def test_the_api_page_names_everything_that_the_platform_gives(self):
+        """API.md is a reference. A name that the platform adds must also appear on the page."""
+        from lab import mavlite, learn_cli
+        from lab.pilot_api import FAIL_CODES, Autopilot, Budgets
+        import dataclasses
+        page = (TEMPLATE / "API.md").read_text()
+        names = ["ap." + name for name in vars(Autopilot) if not name.startswith("_") and callable(vars(Autopilot)[name])]
+        names += ["ap.latest", "ap.acks", "ap.texts"]
+        names += ["budgets." + field.name for field in dataclasses.fields(Budgets)]
+        names += [f"`{code}`" for code in FAIL_CODES]
+        names += [f"`{fault}`" for fault in learn_cli.FAKE_FAULTS if fault != "none"]
+        names += [spec[0] for spec in mavlite.SPECS.values()]
+        names += [f"`{field}`" for spec in mavlite.SPECS.values() for field in spec[2] if not field.startswith("errors_count")]
+        names += ["message.type", "message.fields", "message.pretty()"]
+        names += ["mavlite." + name for name in dir(mavlite) if name.startswith(("CMD_", "MODE_", "BASE_MODE", "EKF_", "RESULT_"))]
+        missing = [name for name in names if name not in page]
+        self.assertEqual(missing, [])
+        self.assertNotIn("```", page, "The API page gives names. It shows no usage sequence or code block.")
+
+    def test_hint_3_files_do_not_hold_name_tables(self):
+        for hint in sorted((TEMPLATE / "hints").glob("step-*/hint-3.md")):
+            text = hint.read_text()
+            self.assertIn("API.md", text, hint)
+            self.assertNotIn("| Item | Reference |", text, hint)
+        self.assertIn("API.md", read("pilot-template/START-HERE.md"))
+        self.assertIn("SESSION-1.md", read("pilot-template/START-HERE.md"))
+        self.assertTrue((TEMPLATE / "SESSION-1.md").is_file())
+
+    def test_no_page_names_a_missing_explainer(self):
+        for path in list(TEMPLATE.rglob("*.md")) + [ROOT / "docs/learning/m1-sessions.md"]:
+            self.assertNotIn("Explainer 01", path.read_text(), path)
+
     def test_the_sentence_check_finds_long_and_passive_sentences(self):
         self.assertTrue(PASSIVE.search("A command can be refused."))
         self.assertFalse(PASSIVE.search("The autopilot can refuse a command."))
