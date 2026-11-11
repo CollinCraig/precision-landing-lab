@@ -10,9 +10,11 @@ import sys
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 
 from lab.link import Connection, Evidence, RunFailure, packet_info
-from lab.run import run, _json
+from lab.run import run, _json, main
+from lab.power import ACState, WallPowerGuard
 
 
 def packet(msgid, *, v2=False, boot=10, system=1, payload=None):
@@ -292,8 +294,8 @@ assert json.loads(sys.stdin.readline()) == {"recorded":True}
                 "--scenario", "synthetic-cli-refusal", "--mode", "offline", "--input-source", "runner", "--input-source", "autopilot",
                 "--ardupilot-version", "synthetic-not-connected", "--container", "synthetic@sha256:" + "a" * 64,
                 "--endpoint", "udpin:0.0.0.0:14550", "--", sys.executable, "-c", "pass"]
-        completed = subprocess.run(argv, capture_output=True, text=True, timeout=3)
-        self.assertEqual(completed.returncode, 1, completed.stderr)
+        with patch("lab.run.WallPowerGuard", return_value=WallPowerGuard(lambda: ACState.UNKNOWN)), patch("builtins.print"):
+            self.assertEqual(main(argv[3:]), 1)
         manifest = json.loads((self.root / "cli/manifest.json").read_text())
         self.assertRegex(manifest["git"]["commit"], r"^[a-f0-9]{40}$")
         self.assertEqual(json.loads((self.root / "cli/result.json").read_text())["failure_reason"]["code"], "ac_unavailable")
