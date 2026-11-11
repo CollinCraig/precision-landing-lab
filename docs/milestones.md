@@ -12,7 +12,8 @@ Agents (read-only, no installs or changes):
 - T3 Connect: current state, what installing the service would change.
 - Versions: pick compatible Ubuntu + ArduPilot + Gazebo + ardupilot_gazebo
   plugin; confirm `LANDING_TARGET` precision landing on that ArduPilot version.
-- Calibration: one small task to compare default vs raised effort.
+- Usage baseline: record wall time and any visible usage for M0 at default
+  effort. (Default-vs-raised effort comparison moves to M1, on real code.)
 
 Deliverable: an **install & setup proposal** with exact commands, versions,
 what changes, how to undo — for Collin to approve item by item.
@@ -20,7 +21,7 @@ Collin: read a 1-page primer "What is SITL and MAVLink?"; approve/decline items.
 
 ## M1 — First flight, no 3D (≈2–3 weeks)
 
-Agents: container build script, SITL launch, run directory + manifest, Rust
+Agents: effort calibration on one small task, container build script, SITL launch, run directory + manifest, Rust
 validator, altitude plot.
 **Collin's piece:** `mission.py` — connect, arm, GUIDED takeoff to 5 m, hold 5 s,
 land, wait for disarm (state machine skeleton + tests).

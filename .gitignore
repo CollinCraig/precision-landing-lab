@@ -11,3 +11,6 @@ runs/
 .venv/
 __pycache__/
 target/
+
+# Local-only notes and raw host inventory (never published)
+local/
