@@ -121,6 +121,7 @@ URL parameters for the scene (all optional):
 Keys: `C` cycles the camera, `L` cycles the time of day, `Q` toggles quality,
 `O` shows or hides the onboard inset, `V` swaps the main view and the inset,
 `H` toggles the M3 HUD, `K` starts or stops cinematic mode.
+`?` opens or closes the help panel (keys and URL parameters) below the timeline.
 
 ## Onboard camera, M3 HUD and cinematic mode
 
