@@ -2,6 +2,9 @@
 
 Status: **planning** · Owner: Collin Craig · Started 2026-11-10
 
+> **Charter v2 (D-042):** scope and sequence now follow `docs/plan/landing-lab-plan-v2.md`.
+> Where this file and the plan disagree on scope or order, the plan wins. Roles, power, approval and publication rules below stay in force.
+
 ## Purpose
 
 A simulation-only lab where one aircraft finds a **vertiport** landing pad,
