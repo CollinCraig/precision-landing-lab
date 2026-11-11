@@ -130,5 +130,5 @@ With no `--fault` the fake has no fault. The command saves the run in `local/las
 | `arm_denied` | It refuses the arm command. It sends a STATUSTEXT with the reason, then an ACK with result 4. |
 | `climb_stuck` | The height stays at 0 after the takeoff request. |
 | `telemetry_lost` | All messages stop after the takeoff request. No ACK arrives. |
-| `telemetry_lost_hold` | All messages stop one second after the height is reached. |
+| `telemetry_lost_hold` | All messages stop one second after the aircraft reaches the target height. |
 | `disarm_stuck` | The motors stay armed after the landing. |

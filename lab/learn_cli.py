@@ -227,7 +227,7 @@ def fake(pilot, fault):
         shutil.copytree(path, keep)
     reason = result["failure_reason"]
     print("Result:", "success" if result["success"] else f"failed {reason['code']}: {reason['detail']}")
-    print(f"The run is saved in local/last-run/fake. Fault used: {fault}.")
+    print(f"The tool saves the run in local/last-run/fake. Fault used: {fault}.")
     return 0 if result["success"] else 1
 
 
