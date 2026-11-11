@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 545" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" fill="currentColor">
+  <title id="t">Precision Landing Lab architecture</title>
+  <desc id="d">Omarchy host contains an Ubuntu container running ArduPilot SITL, later Gazebo, and the lab Python modules. These write run directories that are checked by the Rust validator plv, rendered as reports and a viewer, and shown in a T3 preview tab.</desc>
+  <defs>
+    <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="currentColor" opacity=".7"/></marker>
+  </defs>
+  <style>
+    .box{fill:none;stroke:currentColor;stroke-opacity:.55;stroke-width:1.5}
+    .host{fill:currentColor;fill-opacity:.04;stroke-dasharray:none}
+    .ctr{fill:currentColor;fill-opacity:.06}
+    .later{stroke-dasharray:6 4}
+    .own{fill:#3b82f6;fill-opacity:.18;stroke:#3b82f6;stroke-opacity:.9}
+    .h{font-size:15px;font-weight:600}
+    .s{font-size:12px;opacity:.75}
+    .l{font-size:11px;opacity:.7}
+    .a{stroke:currentColor;stroke-opacity:.7;stroke-width:1.5;fill:none}
+  </style>
+
+  <rect class="box host" x="10" y="10" width="880" height="470" rx="12"/>
+  <text class="h" x="28" y="34">Omarchy laptop (host)</text>
+
+  <rect class="box ctr" x="30" y="50" width="840" height="270" rx="10"/>
+  <text class="h" x="48" y="74">Ubuntu container (distrobox / podman)</text>
+
+  <rect class="box" x="50" y="90" width="250" height="70" rx="8"/>
+  <text class="h" x="64" y="115">ArduPilot SITL</text>
+  <text class="s" x="64" y="135">ArduCopter, unmodified</text>
+  <text class="s" x="64" y="151">flight controller</text>
+
+  <rect class="box later" x="50" y="180" width="250" height="70" rx="8"/>
+  <text class="h" x="64" y="205">Gazebo + plugin (from M2)</text>
+  <text class="s" x="64" y="225">rooftop vertiport world</text>
+  <text class="s" x="64" y="241">downward camera</text>
+
+  <rect class="box" x="340" y="90" width="510" height="215" rx="8"/>
+  <text class="h" x="356" y="115">lab/ (Python)</text>
+  <g class="s">
+    <text x="356" y="140">link.py — MAVLink helpers</text>
+    <text x="356" y="160">guidance.py — LANDING_TARGET</text>
+    <text x="356" y="180">scenarios.py — seeded conditions</text>
+    <text x="356" y="200">metrics.py · run.py</text>
+  </g>
+  <rect class="box own" x="590" y="128" width="244" height="22" rx="4"/><text class="s" x="600" y="144">mission.py (M1)</text>
+  <rect class="box own" x="590" y="156" width="244" height="22" rx="4"/><text class="s" x="600" y="172">perception/ tag detection (M2)</text>
+  <rect class="box own" x="590" y="184" width="244" height="22" rx="4"/><text class="s" x="600" y="200">estimate.py TargetEstimate (M3)</text>
+  <rect class="box own" x="590" y="212" width="244" height="22" rx="4"/><text class="s" x="600" y="228">safety.py abort / go-around (M3)</text>
+  <text class="l" x="590" y="256">blue = Collin's pieces (all planned)</text>
+
+  <path class="a" marker-end="url(#ar)" d="M340 125 H300"/>
+  <path class="a later" marker-end="url(#ar)" d="M340 215 H300"/>
+  <text class="l" x="306" y="118">MAVLink</text>
+
+  <path class="a" marker-end="url(#ar)" d="M595 320 V348"/>
+
+  <rect class="box" x="400" y="350" width="400" height="56" rx="8"/>
+  <text class="h" x="416" y="374">runs/&lt;run_id&gt;/  (git-ignored)</text>
+  <text class="s" x="416" y="393">manifest.json · result.json · tlog · frames · video</text>
+
+  <path class="a" marker-end="url(#ar)" d="M400 378 H330"/>
+  <rect class="box" x="60" y="350" width="270" height="56" rx="8"/>
+  <text class="h" x="76" y="374">Rust validator: plv check</text>
+  <text class="s" x="76" y="393">fail-closed structure checks</text>
+
+  <path class="a" marker-end="url(#ar)" d="M800 378 H830 V420 H760"/>
+  <rect class="box" x="400" y="425" width="360" height="45" rx="8"/>
+  <text class="h" x="416" y="445">reports/ and replay viewer</text>
+  <text class="s" x="416" y="461">results page · overlay video</text>
+
+  <path class="a" marker-end="url(#ar)" d="M400 447 H330"/>
+  <rect class="box later" x="60" y="425" width="270" height="45" rx="8"/>
+  <text class="h" x="76" y="445">T3 preview tab</text>
+  <text class="s" x="76" y="461">localhost only, via T3 Connect</text>
+
+  <text class="l" x="10" y="510">Solid = exists or in current milestone. Dashed = later milestone. Everything is simulation-only.</text>
+  <text class="l" x="10" y="528">Modes: truth (perfect estimate) · camera (AprilTag, must not read truth) · offline (recorded frames).</text>
+</svg>
