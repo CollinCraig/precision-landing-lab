@@ -1,0 +1,51 @@
+# Decision Log
+
+Format: ID · decision · why · status. Newest decisions are appended.
+"Proposed" means an agent default Collin hasn't objected to; change any by asking.
+
+## Resolved — 2026-11-10 planning interview
+
+| ID | Decision | Why | Status |
+|---|---|---|---|
+| D-001 | Learning-first: agents build infrastructure, Collin owns 1–2 core pieces per milestone (~60/40). | Goal is understanding, not just a working demo. | Decided |
+| D-002 | Starting point: comfortable with Python, new-ish to drones/MAVLink/frames. | Sizes the ramp: M1 mission script first, frames before vision. | Decided |
+| D-003 | Collin's pieces are skeleton + failing tests + primer + hint ladder. | Real hands-on learning without blank-page stalls. | Decided |
+| D-004 | Pieces split into 30–60 min steps with checkpoints; no fixed weekly rhythm. | Schedule varies week to week. | Decided |
+| D-005 | Fresh start. No audit or import of `mac-drone-lab` (stays private, untouched). | Clean public history; learner writes core pieces fresh. Supersedes earlier "audit before import". | Decided |
+| D-006 | Public, early, incremental development. First push gated by pre-publish checklist + Collin's approval. | Open-source intent without publishing unchecked work. | Decided |
+| D-007 | License: Apache-2.0. | Permissive, patent clause, common in robotics. ArduPilot (GPL) is used over MAVLink, not vendored. | Decided |
+| D-008 | Heavy sims run lid-shut on wall power only; light work on battery. | Thermal and battery safety. Lid-closed setup not done yet — M0 proposes it. | Decided |
+| D-009 | Simulation stack lives in an Ubuntu container (distrobox/podman) on the laptop. | ArduPilot/Gazebo officially support Ubuntu; keeps Omarchy clean; rebuildable. Install needs approval. | Decided |
+| D-010 | Every milestone ships a flight video. Small summaries in repo; videos/logs stay local (git-ignored); private demo page per milestone; Collin chooses which videos go public. | Remote review from MacBook/iPad without bloating or leaking. | Decided |
+| D-011 | M3 success = within 25 cm of pad center, 8/10 tries, calm. Revisit after M2. | Achievable, measurable target; tighter/windy goals belong to M4. | Decided |
+| D-012 | Two approval stops per milestone (brief at start, demo at end) plus fixed stops (installs/system changes, first public push, build phases). | Keeps work moving between Collin's sessions. | Decided |
+| D-013 | Repo name `precision-landing-lab`. Local folder name may stay as-is. | Standard community term, discoverable. | Proposed (Collin leaning B) |
+
+## Proposed defaults (no objection raised)
+
+| ID | Default |
+|---|---|
+| P-001 | Rust run validator built in M1 by Sol; checks run outputs are complete/consistent and camera-mode runs contain no truth inputs. |
+| P-002 | Notifications only in the planning T3 thread: approval needed or demo ready. |
+| P-003 | Usage: rough "agent work" note per milestone report; Collin checks provider usage pages once per milestone. No automatic quota balancing exists; never a silent paid-API fallback. |
+| P-004 | Cursor/Grok only on Collin's explicit request (billing unverified). |
+| P-005 | GPU: read-only diagnosis in M0; simulation work isn't blocked on it until M2 camera rendering needs it. |
+
+## Research inputs (context, not decisions)
+
+- Vendor docs support: Opus planning/acceptance, Sol at default/medium effort for
+  long-running code work, Sonnet routine UI with Opus visual acceptance,
+  cross-provider review. Harness defaults may differ from vendor API defaults —
+  calibrate on a small M0/M1 task.
+- Grok via Cursor X research: inconclusive (no X access); no community consensus claimed.
+- Gemini via Antigravity: blocked (ACP 1.4.5 server SIGKILL at init, cause unproven).
+
+## Open questions
+
+- Exact ArduPilot / Gazebo / Ubuntu versions and `LANDING_TARGET` precision-landing
+  support on the pinned version (M0).
+- Lid-closed sleep/power config and T3 Connect service install (M0 proposal, needs approval).
+- Whether NVIDIA compute repair is worth it (M0 diagnosis).
+- Touchdown speed and timeout thresholds (proposed in `architecture.md`).
+- Demo page hosting/retention details and video retention policy.
+- Gazebo wind support on the pinned version (before M4).
