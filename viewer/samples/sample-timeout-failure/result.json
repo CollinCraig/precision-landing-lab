@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "run_id": "sample-timeout-failure",
+  "seed": 11,
+  "scenario": {
+    "name": "m1-first-flight"
+  },
+  "mode": "truth",
+  "success": false,
+  "failure_reason": {
+    "code": "timeout",
+    "detail": "Timed out after 12 s waiting for altitude >= 5.7 m"
+  },
+  "duration_us": 25000000,
+  "tlog_records": 277,
+  "events": [
+    {
+      "t_us": 0,
+      "kind": "run_started",
+      "source": "runner"
+    },
+    {
+      "t_us": 1500000,
+      "kind": "mode_guided",
+      "source": "runner"
+    },
+    {
+      "t_us": 2000000,
+      "kind": "armed",
+      "source": "runner"
+    },
+    {
+      "t_us": 2000000,
+      "kind": "state:takeoff",
+      "source": "runner"
+    },
+    {
+      "t_us": 3000000,
+      "kind": "wait_altitude_started",
+      "source": "runner"
+    },
+    {
+      "t_us": 15000000,
+      "kind": "wait_altitude_timeout",
+      "source": "runner"
+    },
+    {
+      "t_us": 15000000,
+      "kind": "state:abort",
+      "source": "runner"
+    },
+    {
+      "t_us": 15000000,
+      "kind": "mode_land",
+      "source": "runner"
+    },
+    {
+      "t_us": 23000000,
+      "kind": "touchdown",
+      "source": "runner"
+    },
+    {
+      "t_us": 24000000,
+      "kind": "disarmed",
+      "source": "runner"
+    },
+    {
+      "t_us": 24000000,
+      "kind": "state:failed",
+      "source": "runner"
+    },
+    {
+      "t_us": 25000000,
+      "kind": "run_failed",
+      "source": "runner"
+    }
+  ]
+}
